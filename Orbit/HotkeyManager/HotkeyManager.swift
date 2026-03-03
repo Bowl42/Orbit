@@ -33,6 +33,12 @@ private func hotkeyEventCallback(
         manager.handleKeyUp(keyCode: keyCode, flags: flags)
     case .flagsChanged:
         manager.handleFlagsChanged(keyCode: keyCode, flags: flags)
+    case .otherMouseDown:
+        let button = event.getIntegerValueField(.mouseEventButtonNumber)
+        manager.handleMouseDown(button: button, flags: flags)
+    case .otherMouseUp:
+        let button = event.getIntegerValueField(.mouseEventButtonNumber)
+        manager.handleMouseUp(button: button, flags: flags)
     default:
         break
     }
@@ -41,6 +47,9 @@ private func hotkeyEventCallback(
 }
 
 /// Manages global hotkey detection using a CGEvent tap in listen-only mode.
+///
+/// Supports both keyboard shortcuts (e.g. Ctrl+Space) and mouse buttons
+/// (e.g. Mouse4/Mouse5 side buttons on Logitech/other multi-button mice).
 ///
 /// This class is intentionally NOT `@MainActor` because the CGEvent tap callback
 /// is a C function pointer that cannot be actor-isolated. The callback accesses
@@ -74,10 +83,15 @@ final class HotkeyManager: @unchecked Sendable {
             return false
         }
 
-        let eventMask: CGEventMask =
+        // Build event mask based on trigger type
+        var eventMask: CGEventMask =
             (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.keyUp.rawValue)
             | (1 << CGEventType.flagsChanged.rawValue)
+
+        // Always include mouse events so we can switch trigger type at runtime
+        eventMask |= (1 << CGEventType.otherMouseDown.rawValue)
+            | (1 << CGEventType.otherMouseUp.rawValue)
 
         guard let port = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -129,8 +143,10 @@ final class HotkeyManager: @unchecked Sendable {
         runLoopSource = nil
     }
 
+    // MARK: - Keyboard event handlers
+
     fileprivate func handleKeyDown(keyCode: Int64, flags: CGEventFlags) {
-        if !isHotkeyHeld && keyCombo.matches(keyCode: keyCode, flags: flags) {
+        if !isHotkeyHeld && keyCombo.matchesKeyDown(keyCode: keyCode, flags: flags) {
             isHotkeyHeld = true
             let callback = onHotkeyDown
             DispatchQueue.main.async {
@@ -138,6 +154,7 @@ final class HotkeyManager: @unchecked Sendable {
             }
         }
 
+        // Esc cancels while menu is shown
         if isHotkeyHeld && keyCode == 53 /* kVK_Escape */ {
             isHotkeyHeld = false
             let callback = onHotkeyUp
@@ -148,7 +165,7 @@ final class HotkeyManager: @unchecked Sendable {
     }
 
     fileprivate func handleKeyUp(keyCode: Int64, flags: CGEventFlags) {
-        if isHotkeyHeld && keyCode == keyCombo.keyCode {
+        if isHotkeyHeld && keyCombo.matchesKeyUp(keyCode: keyCode) {
             isHotkeyHeld = false
             let callback = onHotkeyUp
             DispatchQueue.main.async {
@@ -158,7 +175,30 @@ final class HotkeyManager: @unchecked Sendable {
     }
 
     fileprivate func handleFlagsChanged(keyCode: Int64, flags: CGEventFlags) {
-        if isHotkeyHeld && !keyCombo.modifiersMatch(flags: flags) {
+        // Only relevant for keyboard triggers with modifiers
+        if isHotkeyHeld && !keyCombo.isMouseTrigger && !keyCombo.modifiersMatch(flags: flags) {
+            isHotkeyHeld = false
+            let callback = onHotkeyUp
+            DispatchQueue.main.async {
+                callback?()
+            }
+        }
+    }
+
+    // MARK: - Mouse event handlers
+
+    fileprivate func handleMouseDown(button: Int64, flags: CGEventFlags) {
+        if !isHotkeyHeld && keyCombo.matchesMouseDown(buttonNumber: button, flags: flags) {
+            isHotkeyHeld = true
+            let callback = onHotkeyDown
+            DispatchQueue.main.async {
+                callback?()
+            }
+        }
+    }
+
+    fileprivate func handleMouseUp(button: Int64, flags: CGEventFlags) {
+        if isHotkeyHeld && keyCombo.matchesMouseUp(buttonNumber: button) {
             isHotkeyHeld = false
             let callback = onHotkeyUp
             DispatchQueue.main.async {

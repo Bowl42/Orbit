@@ -6,8 +6,26 @@ struct OrbitConfig: Codable, Equatable, Sendable {
     var sectors: [SectorConfig]
 
     struct HotkeyConfig: Codable, Equatable, Sendable {
-        var key: String          // e.g. "space"
-        var modifiers: [String]  // e.g. ["control"]
+        /// Trigger type: "keyboard" or "mouse"
+        var type: String?        // nil defaults to "keyboard" for backwards compat
+        /// For keyboard: key name (e.g. "space"). For mouse: "mouse4", "mouse5", etc.
+        var key: String
+        /// Modifier keys required (e.g. ["control"]). For mouse buttons, can be empty.
+        var modifiers: [String]
+
+        var isMouseTrigger: Bool {
+            type == "mouse" || key.hasPrefix("mouse")
+        }
+
+        /// Mouse button number (0-indexed: mouse4 = button 3, mouse5 = button 4)
+        var mouseButtonNumber: Int64? {
+            switch key.lowercased() {
+            case "mouse3": return 2  // middle click
+            case "mouse4": return 3  // back/side button
+            case "mouse5": return 4  // forward/side button
+            default: return nil
+            }
+        }
     }
 
     enum SectorConfig: Codable, Equatable, Sendable {

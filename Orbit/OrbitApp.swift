@@ -15,7 +15,8 @@ struct OrbitApp: App {
                         HotkeyManager.requestPermission()
                     }
                 } else {
-                    Text("Ready (Ctrl+Space)")
+                    let combo = KeyCombo(from: appDelegate.controller?.configManager.config.hotkey ?? .init(key: "space", modifiers: ["control"]))
+                    Text("Ready (\(combo.displayName))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

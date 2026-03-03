@@ -1,8 +1,14 @@
 import Carbon.HIToolbox
 import CoreGraphics
 
+/// Represents a trigger combination — either a keyboard key + modifiers, or a mouse button + optional modifiers.
 struct KeyCombo: Equatable, Sendable {
-    let keyCode: Int64
+    enum TriggerType: Equatable, Sendable {
+        case keyboard(keyCode: Int64)
+        case mouseButton(number: Int64)  // CGEvent button number: 2=middle, 3=mouse4, 4=mouse5
+    }
+
+    let trigger: TriggerType
     let modifiers: CGEventFlags
 
     static let keyCodes: [String: Int64] = [
@@ -29,9 +35,19 @@ struct KeyCombo: Equatable, Sendable {
     ]
 
     init(key: String, modifiers: [String]) {
-        self.keyCode = KeyCombo.keyCodes[key.lowercased()] ?? Int64(kVK_Space)
-        self.modifiers = modifiers.reduce(CGEventFlags()) { result, mod in
+        let mods = modifiers.reduce(CGEventFlags()) { result, mod in
             result.union(KeyCombo.modifierMap[mod.lowercased()] ?? [])
+        }
+        self.modifiers = mods
+
+        // Check if it's a mouse button trigger
+        switch key.lowercased() {
+        case "mouse3": self.trigger = .mouseButton(number: 2)
+        case "mouse4": self.trigger = .mouseButton(number: 3)
+        case "mouse5": self.trigger = .mouseButton(number: 4)
+        default:
+            let code = KeyCombo.keyCodes[key.lowercased()] ?? Int64(kVK_Space)
+            self.trigger = .keyboard(keyCode: code)
         }
     }
 
@@ -39,12 +55,59 @@ struct KeyCombo: Equatable, Sendable {
         self.init(key: config.key, modifiers: config.modifiers)
     }
 
-    func matches(keyCode: Int64, flags: CGEventFlags) -> Bool {
-        guard keyCode == self.keyCode else { return false }
-        return flags.contains(modifiers)
+    var isMouseTrigger: Bool {
+        if case .mouseButton = trigger { return true }
+        return false
+    }
+
+    // MARK: - Keyboard matching
+
+    func matchesKeyDown(keyCode: Int64, flags: CGEventFlags) -> Bool {
+        guard case .keyboard(let code) = trigger else { return false }
+        return keyCode == code && flags.contains(modifiers)
+    }
+
+    func matchesKeyUp(keyCode: Int64) -> Bool {
+        guard case .keyboard(let code) = trigger else { return false }
+        return keyCode == code
     }
 
     func modifiersMatch(flags: CGEventFlags) -> Bool {
+        guard !modifiers.isEmpty else { return true }
         return flags.contains(modifiers)
+    }
+
+    // MARK: - Mouse matching
+
+    func matchesMouseDown(buttonNumber: Int64, flags: CGEventFlags) -> Bool {
+        guard case .mouseButton(let number) = trigger else { return false }
+        guard buttonNumber == number else { return false }
+        if modifiers.isEmpty { return true }
+        return flags.contains(modifiers)
+    }
+
+    func matchesMouseUp(buttonNumber: Int64) -> Bool {
+        guard case .mouseButton(let number) = trigger else { return false }
+        return buttonNumber == number
+    }
+
+    // MARK: - Display
+
+    var displayName: String {
+        var parts: [String] = []
+        if modifiers.contains(.maskControl) { parts.append("Ctrl") }
+        if modifiers.contains(.maskAlternate) { parts.append("Opt") }
+        if modifiers.contains(.maskShift) { parts.append("Shift") }
+        if modifiers.contains(.maskCommand) { parts.append("Cmd") }
+
+        switch trigger {
+        case .keyboard(let code):
+            let keyName = KeyCombo.keyCodes.first { $0.value == code }?.key.capitalized ?? "?"
+            parts.append(keyName)
+        case .mouseButton(let num):
+            parts.append("Mouse\(num + 1)")  // display as Mouse4, Mouse5 etc.
+        }
+
+        return parts.joined(separator: "+")
     }
 }
