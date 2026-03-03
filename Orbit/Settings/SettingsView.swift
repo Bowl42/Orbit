@@ -89,7 +89,7 @@ struct SettingsView: View {
             .background(.bar)
             .overlay(Rectangle().frame(height: 1).foregroundStyle(.separator), alignment: .top)
         }
-        .frame(width: 520, height: 520)
+        .frame(width: 560, height: 540)
         .sheet(isPresented: $showingAppPicker) {
             AppPickerView(apps: installedApps) { app in
                 sectorConfigs[selectedSectorIndex] = .pinned(
@@ -330,28 +330,50 @@ private struct SectorsTab: View {
     let installedApps: [InstalledApp]
 
     var body: some View {
-        Form {
-            Section {
+        HStack(spacing: 0) {
+            // Left: ring selector
+            VStack(spacing: 0) {
                 SectorRingPreview(
                     configs: sectorConfigs,
                     selectedIndex: $selectedSectorIndex,
                     installedApps: installedApps
                 )
-                .padding(.vertical, 4)
-            }
+                .padding(.top, 16)
 
-            Section("Sector Configuration") {
-                SectorEditor(
-                    config: $sectorConfigs[selectedSectorIndex],
-                    index: selectedSectorIndex,
-                    installedApps: installedApps,
-                    onChooseApp: { showingAppPicker = true },
-                    onBrowsePath: { showingPathPicker = true }
-                )
+                Spacer()
+
+                Text("Click a sector to configure.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+            }
+            .frame(width: 220)
+            .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
+
+            Divider()
+
+            // Right: editor
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Header
+                    Text("SECTOR \(selectedSectorIndex + 1)")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+
+                    SectorEditor(
+                        config: $sectorConfigs[selectedSectorIndex],
+                        index: selectedSectorIndex,
+                        installedApps: installedApps,
+                        onChooseApp: { showingAppPicker = true },
+                        onBrowsePath: { showingPathPicker = true }
+                    )
+                }
+                .padding(16)
             }
         }
-        .formStyle(.grouped)
-        .scrollDisabled(true)
     }
 }
 
@@ -362,8 +384,8 @@ private struct SectorRingPreview: View {
     @Binding var selectedIndex: Int
     let installedApps: [InstalledApp]
 
-    private let ringRadius: CGFloat = 80
-    private let dotSize: CGFloat = 42
+    private let ringRadius: CGFloat = 65
+    private let dotSize: CGFloat = 36
 
     var body: some View {
         HStack {
@@ -490,6 +512,60 @@ private enum SectorKind: String, CaseIterable {
     }
 }
 
+// MARK: - Editor Helper Views
+
+private struct FieldLabel: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(.system(size: 9, weight: .bold, design: .rounded))
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+    }
+}
+
+private struct FieldBox: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .textFieldStyle(.plain)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(.background.opacity(0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            )
+    }
+}
+
+private struct CardBox: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(14)
+            .background(.regularMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.12), lineWidth: 0.5)
+            )
+    }
+}
+
+private struct HintLabel: View {
+    let text: String
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "info.circle")
+            Text(text)
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+}
+
+// MARK: - Sector Editor
+
 private struct SectorEditor: View {
     @Binding var config: OrbitConfig.SectorConfig
     let index: Int
@@ -501,7 +577,7 @@ private struct SectorEditor: View {
         Binding(
             get: { SectorKind(from: config) },
             set: { kind in
-                withAnimation {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
                     switch kind {
                     case .recent: config = .recent(index: 0)
                     case .pinned: config = .pinned(bundleId: "", name: "", icon: nil)
@@ -517,100 +593,216 @@ private struct SectorEditor: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Picker("Type", selection: sectorKind) {
-                ForEach(SectorKind.allCases, id: \.self) { kind in
-                    Text(kind.rawValue).tag(kind)
+        VStack(alignment: .leading, spacing: 14) {
+            // Type selector card
+            VStack(alignment: .leading, spacing: 6) {
+                FieldLabel(text: "Action Type")
+                Picker("Type", selection: sectorKind) {
+                    ForEach(SectorKind.allCases, id: \.self) { kind in
+                        Text(kind.rawValue).tag(kind)
+                    }
                 }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .modifier(FieldBox())
             }
-            .pickerStyle(.menu)
+            .modifier(CardBox())
 
+            // Per-type fields
             sectorFields
         }
-        .padding(.vertical, 2)
     }
 
     @ViewBuilder
     private var sectorFields: some View {
         switch config {
         case .recent:
-            Text("Shows the next most recently used app.")
-                .font(.callout)
-                .foregroundStyle(.tertiary)
-
-        case .pinned(let bundleId, let name, _):
-            pinnedFields(bundleId: bundleId, name: name)
-
-        case .url(let name, let url, _):
-            TextField("Name", text: urlNameBinding(name: name, url: url))
-            TextField("URL", text: urlValueBinding(name: name, url: url))
-                .textContentType(.URL)
-
-        case .shellCommand(let name, let command, _):
-            TextField("Name", text: shellNameBinding(name: name, command: command))
-            TextField("Command", text: shellCommandBinding(name: name, command: command))
-                .font(.system(.body, design: .monospaced))
-
-        case .systemAction(let action):
-            Picker("Action", selection: systemActionBinding(current: action)) {
-                ForEach(OrbitConfig.SystemActionKind.allCases, id: \.self) { kind in
-                    Text(kind.displayName).tag(kind)
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.title3)
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20)
+                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Automatic")
+                        .fontWeight(.semibold)
+                    Text("This sector shows the last application you used. No configuration needed.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(CardBox())
+
+        case .pinned(let bundleId, let name, _):
+            VStack(alignment: .leading, spacing: 6) {
+                FieldLabel(text: "Application")
+                Button(action: onChooseApp) {
+                    HStack(spacing: 10) {
+                        if let app = installedApps.first(where: { $0.bundleId == bundleId }) {
+                            Image(nsImage: app.icon)
+                                .resizable()
+                                .frame(width: 28, height: 28)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(app.name)
+                                    .fontWeight(.medium)
+                                    .lineLimit(1)
+                                Text(app.bundleId)
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        } else if !name.isEmpty {
+                            Image(systemName: "app.dashed")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 28, height: 28)
+                            Text(name).lineLimit(1)
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        } else {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(.tint)
+                                .frame(width: 28, height: 28)
+                            Text("Choose Application...")
+                                .foregroundStyle(.tint)
+                            Spacer()
+                        }
+                    }
+                    .modifier(FieldBox())
+                }
+                .buttonStyle(.plain)
+            }
+            .modifier(CardBox())
+
+        case .url(let name, let url, _):
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    FieldLabel(text: "Display Name")
+                    TextField("e.g. GitHub", text: urlNameBinding(name: name, url: url))
+                        .modifier(FieldBox())
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    FieldLabel(text: "URL")
+                    TextField("https://example.com", text: urlValueBinding(name: name, url: url))
+                        .modifier(FieldBox())
+                        .textContentType(.URL)
+                }
+                if !url.isEmpty, URL(string: url) == nil {
+                    HStack(spacing: 5) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                        Text("Invalid URL format.")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                } else {
+                    HintLabel(text: "Opens in your default browser.")
+                }
+            }
+            .modifier(CardBox())
+
+        case .shellCommand(let name, let command, _):
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    FieldLabel(text: "Display Name")
+                    TextField("e.g. Build Project", text: shellNameBinding(name: name, command: command))
+                        .modifier(FieldBox())
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    FieldLabel(text: "Command")
+                    TextField("e.g. make build && say done", text: shellCommandBinding(name: name, command: command))
+                        .font(.system(.body, design: .monospaced))
+                        .modifier(FieldBox())
+                }
+                HintLabel(text: "Runs via /bin/zsh. Output is silenced.")
+            }
+            .modifier(CardBox())
+
+        case .systemAction(let action):
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    FieldLabel(text: "System Action")
+                    Picker("Action", selection: systemActionBinding(current: action)) {
+                        ForEach(OrbitConfig.SystemActionKind.allCases, id: \.self) { kind in
+                            Label(kind.displayName, systemImage: kind.sfSymbolName).tag(kind)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .modifier(FieldBox())
+                }
+                HStack(spacing: 6) {
+                    Image(systemName: action.sfSymbolName)
+                        .frame(width: 14)
+                    Text(systemActionDescription(action))
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .modifier(CardBox())
 
         case .shortcut(let name):
-            TextField("Shortcut Name", text: shortcutNameBinding(name: name))
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    FieldLabel(text: "Shortcut Name")
+                    TextField("e.g. Toggle Focus Mode", text: shortcutNameBinding(name: name))
+                        .modifier(FieldBox())
+                }
+                HintLabel(text: "Enter the exact name from the Shortcuts app.")
+            }
+            .modifier(CardBox())
 
         case .openPath(let name, let path, _):
-            TextField("Name", text: pathNameBinding(name: name, path: path))
-            HStack {
-                TextField("Path", text: pathValueBinding(name: name, path: path))
-                    .font(.system(.body, design: .monospaced))
-                Button("Browse...") { onBrowsePath() }
-                    .controlSize(.small)
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    FieldLabel(text: "Display Name")
+                    TextField("e.g. Downloads", text: pathNameBinding(name: name, path: path))
+                        .modifier(FieldBox())
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    FieldLabel(text: "Path")
+                    HStack(spacing: 6) {
+                        TextField("~/Documents", text: pathValueBinding(name: name, path: path))
+                            .font(.system(.body, design: .monospaced))
+                            .modifier(FieldBox())
+                        Button("Browse...", action: onBrowsePath)
+                            .controlSize(.small)
+                    }
+                }
+                if !path.isEmpty {
+                    let expanded = NSString(string: path).expandingTildeInPath
+                    let exists = FileManager.default.fileExists(atPath: expanded)
+                    HStack(spacing: 5) {
+                        Image(systemName: exists ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        Text(exists ? "Path exists." : "Path not found.")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(exists ? .green : .orange)
+                } else {
+                    HintLabel(text: "Opens in Finder. Supports ~ for home directory.")
+                }
             }
+            .modifier(CardBox())
         }
     }
 
-    @ViewBuilder
-    private func pinnedFields(bundleId: String, name: String) -> some View {
-        HStack(spacing: 10) {
-            if let app = installedApps.first(where: { $0.bundleId == bundleId }) {
-                Image(nsImage: app.icon)
-                    .resizable()
-                    .frame(width: 28, height: 28)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(app.name)
-                        .lineLimit(1)
-                    Text(app.bundleId)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-                Spacer()
-                Button("Change...") { onChooseApp() }
-                    .controlSize(.small)
-            } else if !name.isEmpty {
-                Image(systemName: "app.dashed")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(name)
-                        .lineLimit(1)
-                    Text(bundleId)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-                Spacer()
-                Button("Change...") { onChooseApp() }
-                    .controlSize(.small)
-            } else {
-                Button("Choose App...", action: onChooseApp)
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                    .frame(maxWidth: .infinity)
-            }
+    private func systemActionDescription(_ action: OrbitConfig.SystemActionKind) -> String {
+        switch action {
+        case .lockScreen: "Puts the display to sleep and locks the screen."
+        case .toggleDnd: "Toggles Do Not Disturb via the Shortcuts app."
+        case .screenshot: "Opens interactive screenshot capture."
+        case .sleepDisplay: "Turns off the display immediately."
+        case .emptyTrash: "Empties the Trash via Finder."
         }
     }
 
