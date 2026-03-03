@@ -13,6 +13,10 @@
 
 ---
 
+<p align="center">
+  <img src="assets/radial-menu.png" alt="Orbit radial menu" width="480" />
+</p>
+
 ## What is Orbit?
 
 Orbit is a **weapon-wheel style** radial menu that lives in your menu bar. Hold your hotkey, point toward an app, release — done. No clicking, no searching, no Dock diving.
