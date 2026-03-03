@@ -41,8 +41,9 @@ if [ -d "$BUNDLE_RESOURCES" ]; then
     cp -R "$BUNDLE_RESOURCES" "$RESOURCES/"
 fi
 
-# Ad-hoc sign so Accessibility permission persists across rebuilds
-codesign --force --sign - "$APP_DIR"
+# Sign with developer identity so Accessibility/Input Monitoring permissions
+# persist across rebuilds (ad-hoc signing changes hash every build, breaking TCC)
+codesign --force --sign "Apple Development" "$APP_DIR"
 
 echo ""
 echo "✓ ${APP_DIR} created successfully"

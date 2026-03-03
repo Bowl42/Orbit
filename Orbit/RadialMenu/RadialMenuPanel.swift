@@ -4,8 +4,9 @@ import SwiftUI
 final class RadialMenuPanel: NSPanel {
 
     init() {
+        // Increased contentRect to allow breathing room for shadows and scale animations
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 420),
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 500),
             styleMask: [.nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
             defer: true
@@ -41,27 +42,9 @@ final class RadialMenuPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 
     func setContent<Content: View>(@ViewBuilder _ content: () -> Content) {
-        let effectView = NSVisualEffectView()
-        effectView.material = .hudWindow
-        effectView.blendingMode = .behindWindow
-        effectView.state = .active
-        effectView.wantsLayer = true
-        effectView.layer?.cornerRadius = 210 // half of 420
-        effectView.layer?.masksToBounds = true
-        effectView.translatesAutoresizingMaskIntoConstraints = false
-
         let hostingView = NSHostingView(rootView: content().ignoresSafeArea())
-        hostingView.translatesAutoresizingMaskIntoConstraints = false
-        effectView.addSubview(hostingView)
-
-        self.contentView = effectView
-
-        NSLayoutConstraint.activate([
-            hostingView.topAnchor.constraint(equalTo: effectView.topAnchor),
-            hostingView.bottomAnchor.constraint(equalTo: effectView.bottomAnchor),
-            hostingView.leadingAnchor.constraint(equalTo: effectView.leadingAnchor),
-            hostingView.trailingAnchor.constraint(equalTo: effectView.trailingAnchor),
-        ])
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+        self.contentView = hostingView
     }
 
     func showAtMouseLocation() {
@@ -91,8 +74,8 @@ final class RadialMenuPanel: NSPanel {
 
     func dismiss() {
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.15
-            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            context.duration = 0.2
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             self.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
             DispatchQueue.main.async {

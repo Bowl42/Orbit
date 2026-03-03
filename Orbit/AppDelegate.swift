@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    var controller: OrbitController?
+final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
+    @Published var controller: OrbitController?
     var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -42,14 +42,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         )
 
+        let hostingView = NSHostingView(rootView: settingsView)
+        let contentSize = hostingView.intrinsicContentSize
         let window = NSWindow(
-            contentRect: .zero,
+            contentRect: NSRect(origin: .zero, size: contentSize),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
         window.title = "Orbit Settings"
-        window.contentView = NSHostingView(rootView: settingsView)
+        window.contentView = hostingView
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
