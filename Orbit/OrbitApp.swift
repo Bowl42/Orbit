@@ -83,8 +83,11 @@ private struct MenuBarPopoverView: View {
             // Action Buttons
             VStack(spacing: 0) {
                 Button {
+                    let delegate = appDelegate
                     dismiss()
-                    appDelegate.showSettings()
+                    DispatchQueue.main.async {
+                        delegate.showSettings()
+                    }
                 } label: {
                     Label("Settings...", systemImage: "gearshape.fill")
                         .frame(maxWidth: .infinity, alignment: .leading)

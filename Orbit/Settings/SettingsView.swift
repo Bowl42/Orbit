@@ -82,7 +82,7 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.regular)
-                .keyboardShortcut(.defaultAction)
+                .keyboardShortcut("s", modifiers: .command)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
