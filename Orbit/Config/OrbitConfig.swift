@@ -28,12 +28,45 @@ struct OrbitConfig: Codable, Equatable, Sendable {
         }
     }
 
+    enum SystemActionKind: String, Codable, CaseIterable, Equatable, Sendable {
+        case lockScreen
+        case toggleDnd
+        case screenshot
+        case sleepDisplay
+        case emptyTrash
+
+        var displayName: String {
+            switch self {
+            case .lockScreen: "Lock Screen"
+            case .toggleDnd: "Toggle Do Not Disturb"
+            case .screenshot: "Screenshot"
+            case .sleepDisplay: "Sleep Display"
+            case .emptyTrash: "Empty Trash"
+            }
+        }
+
+        var sfSymbolName: String {
+            switch self {
+            case .lockScreen: "lock.fill"
+            case .toggleDnd: "moon.fill"
+            case .screenshot: "camera.viewfinder"
+            case .sleepDisplay: "display"
+            case .emptyTrash: "trash.fill"
+            }
+        }
+    }
+
     enum SectorConfig: Codable, Equatable, Sendable {
         case recent(index: Int)
         case pinned(bundleId: String, name: String, icon: IconConfig?)
+        case url(name: String, url: String, icon: IconConfig?)
+        case shellCommand(name: String, command: String, icon: IconConfig?)
+        case systemAction(action: SystemActionKind)
+        case shortcut(name: String)
+        case openPath(name: String, path: String, icon: IconConfig?)
 
         enum CodingKeys: String, CodingKey {
-            case type, index, bundleId, name, icon
+            case type, index, bundleId, name, icon, url, command, action, path
         }
 
         struct IconConfig: Codable, Equatable, Sendable {
@@ -52,6 +85,27 @@ struct OrbitConfig: Codable, Equatable, Sendable {
                 let name = try container.decode(String.self, forKey: .name)
                 let icon = try container.decodeIfPresent(IconConfig.self, forKey: .icon)
                 self = .pinned(bundleId: bundleId, name: name, icon: icon)
+            case "url":
+                let name = try container.decode(String.self, forKey: .name)
+                let url = try container.decode(String.self, forKey: .url)
+                let icon = try container.decodeIfPresent(IconConfig.self, forKey: .icon)
+                self = .url(name: name, url: url, icon: icon)
+            case "shellCommand":
+                let name = try container.decode(String.self, forKey: .name)
+                let command = try container.decode(String.self, forKey: .command)
+                let icon = try container.decodeIfPresent(IconConfig.self, forKey: .icon)
+                self = .shellCommand(name: name, command: command, icon: icon)
+            case "systemAction":
+                let action = try container.decode(SystemActionKind.self, forKey: .action)
+                self = .systemAction(action: action)
+            case "shortcut":
+                let name = try container.decode(String.self, forKey: .name)
+                self = .shortcut(name: name)
+            case "openPath":
+                let name = try container.decode(String.self, forKey: .name)
+                let path = try container.decode(String.self, forKey: .path)
+                let icon = try container.decodeIfPresent(IconConfig.self, forKey: .icon)
+                self = .openPath(name: name, path: path, icon: icon)
             default:
                 throw DecodingError.dataCorruptedError(
                     forKey: .type, in: container,
@@ -70,6 +124,27 @@ struct OrbitConfig: Codable, Equatable, Sendable {
                 try container.encode("pinned", forKey: .type)
                 try container.encode(bundleId, forKey: .bundleId)
                 try container.encode(name, forKey: .name)
+                try container.encodeIfPresent(icon, forKey: .icon)
+            case .url(let name, let url, let icon):
+                try container.encode("url", forKey: .type)
+                try container.encode(name, forKey: .name)
+                try container.encode(url, forKey: .url)
+                try container.encodeIfPresent(icon, forKey: .icon)
+            case .shellCommand(let name, let command, let icon):
+                try container.encode("shellCommand", forKey: .type)
+                try container.encode(name, forKey: .name)
+                try container.encode(command, forKey: .command)
+                try container.encodeIfPresent(icon, forKey: .icon)
+            case .systemAction(let action):
+                try container.encode("systemAction", forKey: .type)
+                try container.encode(action, forKey: .action)
+            case .shortcut(let name):
+                try container.encode("shortcut", forKey: .type)
+                try container.encode(name, forKey: .name)
+            case .openPath(let name, let path, let icon):
+                try container.encode("openPath", forKey: .type)
+                try container.encode(name, forKey: .name)
+                try container.encode(path, forKey: .path)
                 try container.encodeIfPresent(icon, forKey: .icon)
             }
         }

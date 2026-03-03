@@ -18,6 +18,7 @@ struct SettingsView: View {
     @State private var sectorConfigs: [OrbitConfig.SectorConfig] = (0..<8).map { .recent(index: $0) }
     @State private var selectedSectorIndex: Int = 0
     @State private var showingAppPicker = false
+    @State private var showingPathPicker = false
     @State private var installedApps: [InstalledApp] = []
 
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -65,6 +66,7 @@ struct SettingsView: View {
                     sectorConfigs: $sectorConfigs,
                     selectedSectorIndex: $selectedSectorIndex,
                     showingAppPicker: $showingAppPicker,
+                    showingPathPicker: $showingPathPicker,
                     installedApps: installedApps
                 )
                 .tabItem { Label("Sectors", systemImage: "circle.grid.cross") }
@@ -93,6 +95,28 @@ struct SettingsView: View {
                 sectorConfigs[selectedSectorIndex] = .pinned(
                     bundleId: app.bundleId,
                     name: app.name,
+                    icon: nil
+                )
+            }
+        }
+        .onChange(of: showingPathPicker) { _, show in
+            guard show else { return }
+            showingPathPicker = false
+            let panel = NSOpenPanel()
+            panel.canChooseFiles = true
+            panel.canChooseDirectories = true
+            panel.allowsMultipleSelection = false
+            panel.message = "Choose a file or folder to open"
+            if panel.runModal() == .OK, let url = panel.url {
+                let name: String
+                if case .openPath(let existingName, _, _) = sectorConfigs[selectedSectorIndex], !existingName.isEmpty {
+                    name = existingName
+                } else {
+                    name = url.lastPathComponent
+                }
+                sectorConfigs[selectedSectorIndex] = .openPath(
+                    name: name,
+                    path: url.path,
                     icon: nil
                 )
             }
@@ -162,16 +186,14 @@ struct SettingsView: View {
 
         configManager.config.hotkey = OrbitConfig.HotkeyConfig(type: type, key: key, modifiers: modifiers)
 
-        // Re-number recent indices sequentially
+        // Re-number recent indices sequentially; pass through all other types
         var recentIdx = 0
         configManager.config.sectors = sectorConfigs.map { sector in
-            switch sector {
-            case .recent:
+            if case .recent = sector {
                 defer { recentIdx += 1 }
                 return .recent(index: recentIdx)
-            case .pinned:
-                return sector
             }
+            return sector
         }
 
         configManager.saveConfig()
@@ -304,6 +326,7 @@ private struct SectorsTab: View {
     @Binding var sectorConfigs: [OrbitConfig.SectorConfig]
     @Binding var selectedSectorIndex: Int
     @Binding var showingAppPicker: Bool
+    @Binding var showingPathPicker: Bool
     let installedApps: [InstalledApp]
 
     var body: some View {
@@ -322,7 +345,8 @@ private struct SectorsTab: View {
                     config: $sectorConfigs[selectedSectorIndex],
                     index: selectedSectorIndex,
                     installedApps: installedApps,
-                    onChooseApp: { showingAppPicker = true }
+                    onChooseApp: { showingAppPicker = true },
+                    onBrowsePath: { showingPathPicker = true }
                 )
             }
         }
@@ -418,30 +442,74 @@ private struct SectorRingPreview: View {
                     .font(.system(size: 15))
                     .foregroundStyle(.secondary)
             }
+        case .url:
+            Image(systemName: "globe")
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
+        case .shellCommand:
+            Image(systemName: "terminal.fill")
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
+        case .systemAction(let kind):
+            Image(systemName: kind.sfSymbolName)
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
+        case .shortcut:
+            Image(systemName: "command.square.fill")
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
+        case .openPath:
+            Image(systemName: "folder.fill")
+                .font(.system(size: 15))
+                .foregroundStyle(.secondary)
         }
     }
 }
 
 // MARK: - Sector Editor
 
+private enum SectorKind: String, CaseIterable {
+    case recent = "Recent App"
+    case pinned = "Open App"
+    case url = "URL"
+    case shellCommand = "Shell Command"
+    case systemAction = "System Action"
+    case shortcut = "Shortcut"
+    case openPath = "File or Folder"
+
+    init(from config: OrbitConfig.SectorConfig) {
+        switch config {
+        case .recent: self = .recent
+        case .pinned: self = .pinned
+        case .url: self = .url
+        case .shellCommand: self = .shellCommand
+        case .systemAction: self = .systemAction
+        case .shortcut: self = .shortcut
+        case .openPath: self = .openPath
+        }
+    }
+}
+
 private struct SectorEditor: View {
     @Binding var config: OrbitConfig.SectorConfig
     let index: Int
     let installedApps: [InstalledApp]
     let onChooseApp: () -> Void
+    let onBrowsePath: () -> Void
 
-    private var isPinned: Binding<Bool> {
+    private var sectorKind: Binding<SectorKind> {
         Binding(
-            get: {
-                if case .pinned = config { return true }
-                return false
-            },
-            set: { pinned in
+            get: { SectorKind(from: config) },
+            set: { kind in
                 withAnimation {
-                    if pinned {
-                        config = .pinned(bundleId: "", name: "", icon: nil)
-                    } else {
-                        config = .recent(index: 0)
+                    switch kind {
+                    case .recent: config = .recent(index: 0)
+                    case .pinned: config = .pinned(bundleId: "", name: "", icon: nil)
+                    case .url: config = .url(name: "", url: "", icon: nil)
+                    case .shellCommand: config = .shellCommand(name: "", command: "", icon: nil)
+                    case .systemAction: config = .systemAction(action: .lockScreen)
+                    case .shortcut: config = .shortcut(name: "")
+                    case .openPath: config = .openPath(name: "", path: "", icon: nil)
                     }
                 }
             }
@@ -450,58 +518,134 @@ private struct SectorEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("Type", selection: isPinned) {
-                Text("Recent App").tag(false)
-                Text("Pinned App").tag(true)
-            }
-            .pickerStyle(.segmented)
-
-            if case .pinned(let bundleId, let name, _) = config {
-                HStack(spacing: 10) {
-                    if let app = installedApps.first(where: { $0.bundleId == bundleId }) {
-                        Image(nsImage: app.icon)
-                            .resizable()
-                            .frame(width: 28, height: 28)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(app.name)
-                                .lineLimit(1)
-                            Text(app.bundleId)
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                        }
-                        Spacer()
-                        Button("Change...") { onChooseApp() }
-                            .controlSize(.small)
-                    } else if !name.isEmpty {
-                        Image(systemName: "app.dashed")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(name)
-                                .lineLimit(1)
-                            Text(bundleId)
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                        }
-                        Spacer()
-                        Button("Change...") { onChooseApp() }
-                            .controlSize(.small)
-                    } else {
-                        Button("Choose App...", action: onChooseApp)
-                            .buttonStyle(.bordered)
-                            .controlSize(.large)
-                            .frame(maxWidth: .infinity)
-                    }
+            Picker("Type", selection: sectorKind) {
+                ForEach(SectorKind.allCases, id: \.self) { kind in
+                    Text(kind.rawValue).tag(kind)
                 }
-            } else {
-                Text("Shows the next most recently used app.")
-                    .font(.callout)
-                    .foregroundStyle(.tertiary)
             }
+            .pickerStyle(.menu)
+
+            sectorFields
         }
         .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private var sectorFields: some View {
+        switch config {
+        case .recent:
+            Text("Shows the next most recently used app.")
+                .font(.callout)
+                .foregroundStyle(.tertiary)
+
+        case .pinned(let bundleId, let name, _):
+            pinnedFields(bundleId: bundleId, name: name)
+
+        case .url(let name, let url, _):
+            TextField("Name", text: urlNameBinding(name: name, url: url))
+            TextField("URL", text: urlValueBinding(name: name, url: url))
+                .textContentType(.URL)
+
+        case .shellCommand(let name, let command, _):
+            TextField("Name", text: shellNameBinding(name: name, command: command))
+            TextField("Command", text: shellCommandBinding(name: name, command: command))
+                .font(.system(.body, design: .monospaced))
+
+        case .systemAction(let action):
+            Picker("Action", selection: systemActionBinding(current: action)) {
+                ForEach(OrbitConfig.SystemActionKind.allCases, id: \.self) { kind in
+                    Text(kind.displayName).tag(kind)
+                }
+            }
+
+        case .shortcut(let name):
+            TextField("Shortcut Name", text: shortcutNameBinding(name: name))
+
+        case .openPath(let name, let path, _):
+            TextField("Name", text: pathNameBinding(name: name, path: path))
+            HStack {
+                TextField("Path", text: pathValueBinding(name: name, path: path))
+                    .font(.system(.body, design: .monospaced))
+                Button("Browse...") { onBrowsePath() }
+                    .controlSize(.small)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func pinnedFields(bundleId: String, name: String) -> some View {
+        HStack(spacing: 10) {
+            if let app = installedApps.first(where: { $0.bundleId == bundleId }) {
+                Image(nsImage: app.icon)
+                    .resizable()
+                    .frame(width: 28, height: 28)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(app.name)
+                        .lineLimit(1)
+                    Text(app.bundleId)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Button("Change...") { onChooseApp() }
+                    .controlSize(.small)
+            } else if !name.isEmpty {
+                Image(systemName: "app.dashed")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name)
+                        .lineLimit(1)
+                    Text(bundleId)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Button("Change...") { onChooseApp() }
+                    .controlSize(.small)
+            } else {
+                Button("Choose App...", action: onChooseApp)
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    // MARK: - Field Bindings
+
+    private func urlNameBinding(name: String, url: String) -> Binding<String> {
+        Binding(get: { name }, set: { config = .url(name: $0, url: url, icon: nil) })
+    }
+
+    private func urlValueBinding(name: String, url: String) -> Binding<String> {
+        Binding(get: { url }, set: { config = .url(name: name, url: $0, icon: nil) })
+    }
+
+    private func shellNameBinding(name: String, command: String) -> Binding<String> {
+        Binding(get: { name }, set: { config = .shellCommand(name: $0, command: command, icon: nil) })
+    }
+
+    private func shellCommandBinding(name: String, command: String) -> Binding<String> {
+        Binding(get: { command }, set: { config = .shellCommand(name: name, command: $0, icon: nil) })
+    }
+
+    private func systemActionBinding(current: OrbitConfig.SystemActionKind) -> Binding<OrbitConfig.SystemActionKind> {
+        Binding(get: { current }, set: { config = .systemAction(action: $0) })
+    }
+
+    private func shortcutNameBinding(name: String) -> Binding<String> {
+        Binding(get: { name }, set: { config = .shortcut(name: $0) })
+    }
+
+    private func pathNameBinding(name: String, path: String) -> Binding<String> {
+        Binding(get: { name }, set: { config = .openPath(name: $0, path: path, icon: nil) })
+    }
+
+    private func pathValueBinding(name: String, path: String) -> Binding<String> {
+        Binding(get: { path }, set: { config = .openPath(name: name, path: $0, icon: nil) })
     }
 }
 
