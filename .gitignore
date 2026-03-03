@@ -11,3 +11,13 @@ DerivedData/
 
 # macOS
 .DS_Store
+
+# Secrets & credentials
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*
+secrets*
