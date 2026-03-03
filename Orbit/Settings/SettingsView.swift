@@ -350,7 +350,7 @@ private struct SectorsTab: View {
                     .padding(.bottom, 16)
             }
             .frame(width: 220)
-            .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
+            .background(.ultraThinMaterial)
 
             Divider()
 
@@ -530,11 +530,11 @@ private struct FieldBox: ViewModifier {
             .textFieldStyle(.plain)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(.background.opacity(0.5))
+            .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                    .stroke(Color.secondary.opacity(0.15), lineWidth: 0.5)
             )
     }
 }
@@ -547,7 +547,7 @@ private struct CardBox: ViewModifier {
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.secondary.opacity(0.12), lineWidth: 0.5)
+                    .stroke(Color.secondary.opacity(0.15), lineWidth: 0.5)
             )
     }
 }
