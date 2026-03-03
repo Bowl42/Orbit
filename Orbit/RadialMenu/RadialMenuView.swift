@@ -3,6 +3,8 @@ import SwiftUI
 struct RadialMenuView: View {
     let viewModel: RadialMenuViewModel
 
+    @State private var isAppearing = false
+
     private let diameter: CGFloat = 320
     private let iconRingRadius: CGFloat = 110
     private let centerRadius: CGFloat = 40
@@ -35,9 +37,16 @@ struct RadialMenuView: View {
                     angle: sectorAngle,
                     radius: iconRingRadius
                 )
+                .opacity(isAppearing ? 1 : 0)
+                .scaleEffect(isAppearing ? 1 : 0.3)
+                .animation(.spring(duration: 0.3, bounce: 0.25).delay(Double(index) * 0.02), value: isAppearing)
             }
         }
         .frame(width: diameter, height: diameter)
+        .scaleEffect(isAppearing ? 1 : 0.8)
+        .opacity(isAppearing ? 1 : 0)
+        .animation(.spring(duration: 0.25, bounce: 0.2), value: isAppearing)
+        .onAppear { isAppearing = true }
     }
 
     /// Calculate the angle for a sector, starting from top (12 o'clock), going clockwise.

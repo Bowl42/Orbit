@@ -65,6 +65,7 @@ final class RadialMenuPanel: NSPanel {
     }
 
     func showAtMouseLocation() {
+        alphaValue = 1
         let mouse = NSEvent.mouseLocation
         let size = frame.size
         let origin = CGPoint(
@@ -89,6 +90,15 @@ final class RadialMenuPanel: NSPanel {
     }
 
     func dismiss() {
-        orderOut(nil)
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.15
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            self.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            DispatchQueue.main.async {
+                self?.orderOut(nil)
+                self?.alphaValue = 1  // Reset for next show
+            }
+        })
     }
 }
