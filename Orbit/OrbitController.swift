@@ -54,13 +54,13 @@ final class OrbitController {
         )
         viewModel.selectedIndex = nil
         viewModel.isVisible = true
-        viewModel.centerPoint = NSEvent.mouseLocation
 
         let panel = RadialMenuPanel()
         panel.setContent {
             RadialMenuView(viewModel: self.viewModel)
         }
-        panel.showAtMouseLocation()
+        // Use the actual panel center (accounts for screen-edge clamping)
+        viewModel.centerPoint = panel.showAtMouseLocation()
         self.panel = panel
 
         mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]) { [weak self] _ in
