@@ -11,18 +11,6 @@ struct LaunchAppAction: OrbitAction {
     }
 
     func execute() async {
-        // Try activating first if already running
-        let running = NSRunningApplication.runningApplications(
-            withBundleIdentifier: bundleIdentifier
-        )
-        if let app = running.first {
-            await MainActor.run {
-                _ = app.activate()
-            }
-            return
-        }
-
-        // Otherwise launch
         guard let appURL = NSWorkspace.shared.urlForApplication(
             withBundleIdentifier: bundleIdentifier
         ) else {

@@ -26,24 +26,26 @@ private func hotkeyEventCallback(
     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
     let flags = event.flags
 
+    var consumed = false
+
     switch type {
     case .keyDown:
-        manager.handleKeyDown(keyCode: keyCode, flags: flags)
+        consumed = manager.handleKeyDown(keyCode: keyCode, flags: flags)
     case .keyUp:
-        manager.handleKeyUp(keyCode: keyCode, flags: flags)
+        consumed = manager.handleKeyUp(keyCode: keyCode, flags: flags)
     case .flagsChanged:
         manager.handleFlagsChanged(keyCode: keyCode, flags: flags)
     case .otherMouseDown:
         let button = event.getIntegerValueField(.mouseEventButtonNumber)
-        manager.handleMouseDown(button: button, flags: flags)
+        consumed = manager.handleMouseDown(button: button, flags: flags)
     case .otherMouseUp:
         let button = event.getIntegerValueField(.mouseEventButtonNumber)
-        manager.handleMouseUp(button: button, flags: flags)
+        consumed = manager.handleMouseUp(button: button, flags: flags)
     default:
         break
     }
 
-    return Unmanaged.passUnretained(event)
+    return consumed ? nil : Unmanaged.passUnretained(event)
 }
 
 /// Manages global hotkey detection using a CGEvent tap in listen-only mode.
@@ -64,16 +66,19 @@ final class HotkeyManager: @unchecked Sendable {
 
     var keyCombo: KeyCombo = KeyCombo(key: "space", modifiers: ["control"])
     private(set) var isHotkeyHeld = false
+    private(set) var isListening = false
 
     var onHotkeyDown: (@Sendable () -> Void)?
     var onHotkeyUp: (@Sendable () -> Void)?
 
     static func hasPermission() -> Bool {
-        CGPreflightListenEventAccess()
+        AXIsProcessTrusted()
     }
 
     static func requestPermission() {
-        CGRequestListenEventAccess()
+        // kAXTrustedCheckOptionPrompt's value is "AXTrustedCheckOptionPrompt"
+        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        AXIsProcessTrustedWithOptions(options)
     }
 
     @discardableResult
@@ -96,7 +101,7 @@ final class HotkeyManager: @unchecked Sendable {
         guard let port = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
-            options: .listenOnly,
+            options: .defaultTap,
             eventsOfInterest: eventMask,
             callback: hotkeyEventCallback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
@@ -123,6 +128,7 @@ final class HotkeyManager: @unchecked Sendable {
             }
         }
 
+        isListening = true
         return true
     }
 
@@ -141,17 +147,20 @@ final class HotkeyManager: @unchecked Sendable {
 
         eventTapPort = nil
         runLoopSource = nil
+        isListening = false
     }
 
     // MARK: - Keyboard event handlers
 
-    fileprivate func handleKeyDown(keyCode: Int64, flags: CGEventFlags) {
+    @discardableResult
+    fileprivate func handleKeyDown(keyCode: Int64, flags: CGEventFlags) -> Bool {
         if !isHotkeyHeld && keyCombo.matchesKeyDown(keyCode: keyCode, flags: flags) {
             isHotkeyHeld = true
             let callback = onHotkeyDown
             DispatchQueue.main.async {
                 callback?()
             }
+            return true
         }
 
         // Esc cancels while menu is shown
@@ -162,16 +171,20 @@ final class HotkeyManager: @unchecked Sendable {
                 callback?()
             }
         }
+        return false
     }
 
-    fileprivate func handleKeyUp(keyCode: Int64, flags: CGEventFlags) {
+    @discardableResult
+    fileprivate func handleKeyUp(keyCode: Int64, flags: CGEventFlags) -> Bool {
         if isHotkeyHeld && keyCombo.matchesKeyUp(keyCode: keyCode) {
             isHotkeyHeld = false
             let callback = onHotkeyUp
             DispatchQueue.main.async {
                 callback?()
             }
+            return true
         }
+        return false
     }
 
     fileprivate func handleFlagsChanged(keyCode: Int64, flags: CGEventFlags) {
@@ -187,23 +200,29 @@ final class HotkeyManager: @unchecked Sendable {
 
     // MARK: - Mouse event handlers
 
-    fileprivate func handleMouseDown(button: Int64, flags: CGEventFlags) {
+    @discardableResult
+    fileprivate func handleMouseDown(button: Int64, flags: CGEventFlags) -> Bool {
         if !isHotkeyHeld && keyCombo.matchesMouseDown(buttonNumber: button, flags: flags) {
             isHotkeyHeld = true
             let callback = onHotkeyDown
             DispatchQueue.main.async {
                 callback?()
             }
+            return true
         }
+        return false
     }
 
-    fileprivate func handleMouseUp(button: Int64, flags: CGEventFlags) {
+    @discardableResult
+    fileprivate func handleMouseUp(button: Int64, flags: CGEventFlags) -> Bool {
         if isHotkeyHeld && keyCombo.matchesMouseUp(buttonNumber: button) {
             isHotkeyHeld = false
             let callback = onHotkeyUp
             DispatchQueue.main.async {
                 callback?()
             }
+            return true
         }
+        return false
     }
 }

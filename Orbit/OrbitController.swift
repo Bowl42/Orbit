@@ -21,9 +21,12 @@ final class OrbitController {
         setupHotkey()
     }
 
+    func applyHotkey() {
+        hotkeyManager.keyCombo = KeyCombo(from: configManager.config.hotkey)
+    }
+
     private func setupHotkey() {
-        let config = configManager.config
-        hotkeyManager.keyCombo = KeyCombo(from: config.hotkey)
+        applyHotkey()
 
         hotkeyManager.onHotkeyDown = { [weak self] in
             MainActor.assumeIsolated {
@@ -60,7 +63,7 @@ final class OrbitController {
         panel.showAtMouseLocation()
         self.panel = panel
 
-        mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in
+        mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.viewModel.updateSelection(mouseLocation: NSEvent.mouseLocation)
             }
@@ -68,11 +71,8 @@ final class OrbitController {
     }
 
     private func hideMenuAndExecute() {
-        if viewModel.selectedIndex != nil {
-            Task {
-                await viewModel.executeSelected()
-            }
-        }
+        let selectedIndex = viewModel.selectedIndex
+        let sectors = viewModel.sectors
 
         if let monitor = mouseMonitor {
             NSEvent.removeMonitor(monitor)
@@ -83,5 +83,12 @@ final class OrbitController {
         viewModel.selectedIndex = nil
         panel?.dismiss()
         panel = nil
+
+        if let index = selectedIndex, index < sectors.count,
+           let action = sectors[index].action {
+            Task {
+                await action.execute()
+            }
+        }
     }
 }

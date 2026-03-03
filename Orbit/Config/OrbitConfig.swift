@@ -76,7 +76,7 @@ struct OrbitConfig: Codable, Equatable, Sendable {
     }
 
     static let `default` = OrbitConfig(
-        hotkey: HotkeyConfig(key: "space", modifiers: ["control"]),
+        hotkey: HotkeyConfig(type: "mouse", key: "mouse4", modifiers: []),
         sectorCount: 8,
         sectors: (0..<8).map { .recent(index: $0) }
     )

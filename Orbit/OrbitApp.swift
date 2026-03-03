@@ -10,18 +10,22 @@ struct OrbitApp: App {
                 Text("Orbit")
                     .font(.headline)
 
-                if !HotkeyManager.hasPermission() {
-                    Button("Grant Input Monitoring Permission") {
-                        HotkeyManager.requestPermission()
-                    }
-                } else {
-                    let combo = KeyCombo(from: appDelegate.controller?.configManager.config.hotkey ?? .init(key: "space", modifiers: ["control"]))
+                if let controller = appDelegate.controller, controller.hotkeyManager.isListening {
+                    let combo = KeyCombo(from: controller.configManager.config.hotkey)
                     Text("Ready (\(combo.displayName))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                } else {
+                    Text("Not running")
+                        .font(.caption)
+                        .foregroundStyle(.red)
                 }
 
                 Divider()
+
+                Button("Settings...") {
+                    appDelegate.showSettings()
+                }
 
                 Button("Quit") {
                     NSApp.terminate(nil)

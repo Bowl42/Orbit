@@ -4,15 +4,17 @@ import SwiftUI
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var controller: OrbitController?
-    var onboardingWindow: NSWindow?
+    var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
+        controller = OrbitController()
+
         if HotkeyManager.hasPermission() {
-            startOrbit()
+            controller?.startListening()
         } else {
-            showOnboarding()
+            showSettings()
         }
     }
 
@@ -20,33 +22,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
-    private func startOrbit() {
-        onboardingWindow?.close()
-        onboardingWindow = nil
-        NSApp.setActivationPolicy(.accessory)
+    func showSettings() {
+        if let existing = settingsWindow, existing.isVisible {
+            existing.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
 
-        controller = OrbitController()
-        controller?.startListening()
-    }
+        guard let controller else { return }
 
-    private func showOnboarding() {
-        NSApp.setActivationPolicy(.regular)
+        let settingsView = SettingsView(
+            configManager: controller.configManager,
+            onSave: { [weak self] in
+                guard let self, let controller = self.controller else { return }
+                controller.applyHotkey()
+                if HotkeyManager.hasPermission() && !controller.hotkeyManager.isListening {
+                    controller.startListening()
+                }
+            }
+        )
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 440, height: 320),
+            contentRect: .zero,
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
-        window.title = "Welcome to Orbit"
+        window.title = "Orbit Settings"
+        window.contentView = NSHostingView(rootView: settingsView)
         window.center()
-        window.contentView = NSHostingView(rootView: PermissionView {
-            DispatchQueue.main.async { [weak self] in
-                self?.startOrbit()
-            }
-        })
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        onboardingWindow = window
+        settingsWindow = window
     }
 }

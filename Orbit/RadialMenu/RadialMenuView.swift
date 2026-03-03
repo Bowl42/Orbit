@@ -5,12 +5,35 @@ struct RadialMenuView: View {
 
     @State private var isAppearing = false
 
-    private let diameter: CGFloat = 320
-    private let iconRingRadius: CGFloat = 110
-    private let centerRadius: CGFloat = 40
+    private let diameter: CGFloat = 420
+    private let iconRingRadius: CGFloat = 145
+    private let centerRadius: CGFloat = 45
+    private let innerRadius: CGFloat = 50
+    private let outerRadius: CGFloat = 210  // diameter / 2
 
     var body: some View {
         ZStack {
+            // Sector highlight wedges
+            ForEach(Array(viewModel.sectors.enumerated()), id: \.element.id) { index, _ in
+                SectorWedge(
+                    index: index,
+                    count: viewModel.sectors.count,
+                    innerRadius: innerRadius,
+                    outerRadius: outerRadius
+                )
+                .fill(.white.opacity(viewModel.selectedIndex == index ? 0.15 : 0))
+                .animation(.easeOut(duration: 0.15), value: viewModel.selectedIndex)
+            }
+
+            // Sector divider lines
+            if viewModel.sectors.count > 1 {
+                ForEach(0..<viewModel.sectors.count, id: \.self) { index in
+                    let startAngle = sectorStartAngle(for: index)
+                    SectorDivider(angle: startAngle, innerRadius: innerRadius, outerRadius: outerRadius)
+                        .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                }
+            }
+
             // Center label
             VStack(spacing: 2) {
                 if let index = viewModel.selectedIndex, index < viewModel.sectors.count {
@@ -30,11 +53,11 @@ struct RadialMenuView: View {
 
             // Sector icons in a ring
             ForEach(Array(viewModel.sectors.enumerated()), id: \.element.id) { index, item in
-                let sectorAngle = sectorAngle(for: index)
+                let angle = iconAngle(for: index)
                 SectorView(
                     item: item,
                     isSelected: viewModel.selectedIndex == index,
-                    angle: sectorAngle,
+                    angle: angle,
                     radius: iconRingRadius
                 )
                 .opacity(isAppearing ? 1 : 0)
@@ -49,11 +72,60 @@ struct RadialMenuView: View {
         .onAppear { isAppearing = true }
     }
 
-    /// Calculate the angle for a sector, starting from top (12 o'clock), going clockwise.
-    private func sectorAngle(for index: Int) -> Angle {
+    /// Angle for positioning icons — center of each sector, from top clockwise.
+    private func iconAngle(for index: Int) -> Angle {
         let count = viewModel.sectors.count
         guard count > 0 else { return .zero }
         let step = 360.0 / Double(count)
         return .degrees(90 - step * Double(index))
+    }
+
+    /// Start angle of a sector edge (for divider lines).
+    private func sectorStartAngle(for index: Int) -> Angle {
+        let count = viewModel.sectors.count
+        let step = 360.0 / Double(count)
+        // Offset by half a sector so dividers sit between icons
+        return .degrees(-90 + step * Double(index) - step / 2)
+    }
+}
+
+// MARK: - Sector wedge shape
+
+struct SectorWedge: Shape {
+    let index: Int
+    let count: Int
+    let innerRadius: CGFloat
+    let outerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let step = 360.0 / Double(count)
+        // Start from top (-90°), offset by half sector so wedge centers on icon
+        let start = Angle.degrees(-90 + step * Double(index) - step / 2)
+        let end = Angle.degrees(-90 + step * Double(index) + step / 2)
+
+        var path = Path()
+        path.addArc(center: center, radius: outerRadius, startAngle: start, endAngle: end, clockwise: false)
+        path.addArc(center: center, radius: innerRadius, startAngle: end, endAngle: start, clockwise: true)
+        path.closeSubpath()
+        return path
+    }
+}
+
+// MARK: - Sector divider line
+
+struct SectorDivider: Shape {
+    let angle: Angle
+    let innerRadius: CGFloat
+    let outerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let cos = cos(angle.radians)
+        let sin = sin(angle.radians)
+        var path = Path()
+        path.move(to: CGPoint(x: center.x + cos * innerRadius, y: center.y + sin * innerRadius))
+        path.addLine(to: CGPoint(x: center.x + cos * outerRadius, y: center.y + sin * outerRadius))
+        return path
     }
 }
