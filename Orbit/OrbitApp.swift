@@ -76,8 +76,8 @@ private struct MenuBarPopoverView: View {
             // Glass-style action buttons
             Button {
                 dismiss()
-                DispatchQueue.main.async {
-                    (NSApp.delegate as? AppDelegate)?.showSettings()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    self.appDelegate.showSettings()
                 }
             } label: {
                 Label("Settings...", systemImage: "gearshape")

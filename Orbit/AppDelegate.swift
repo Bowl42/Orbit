@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, ObservableObject {
     @Published var controller: OrbitController?
     var settingsWindow: NSWindow?
 
@@ -23,9 +23,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     func showSettings() {
-        if let existing = settingsWindow, existing.isVisible {
+        // Become a regular app first so activate() actually works
+        NSApp.setActivationPolicy(.regular)
+
+        if let existing = settingsWindow, existing.isVisible || existing.isMiniaturized {
+            if existing.isMiniaturized { existing.deminiaturize(nil) }
+            existing.orderFrontRegardless()
             existing.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            NSApp.activate()
             return
         }
 
@@ -43,9 +48,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         )
 
         let hostingView = NSHostingView(rootView: settingsView)
-        let contentSize = hostingView.intrinsicContentSize
         let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: contentSize),
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 560),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -55,8 +59,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         window.isMovableByWindowBackground = true
         window.contentView = hostingView
         window.center()
+        window.delegate = self
+        window.orderFrontRegardless()
         window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         settingsWindow = window
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        guard (notification.object as? NSWindow) === settingsWindow else { return }
+        settingsWindow = nil
+        NSApp.setActivationPolicy(.accessory)
     }
 }

@@ -70,7 +70,7 @@ struct SettingsView: View {
             .padding(.vertical, 10)
             .overlay(Rectangle().frame(height: 1).foregroundStyle(.separator), alignment: .top)
         }
-        .frame(width: 560, height: 540)
+        .frame(width: 640, height: 560)
         .background(.regularMaterial)
         .sheet(isPresented: $showingAppPicker) {
             AppPickerView(apps: installedApps) { app in
@@ -358,39 +358,35 @@ private struct SectorsTab: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Left: ring selector
-            VStack(spacing: 0) {
+            // Left: ring slots
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Ring Slots")
+                    .font(.title3.bold())
+                Text("Click a slot to configure it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 SectorRingPreview(
                     configs: sectorConfigs,
                     selectedIndex: $selectedSectorIndex,
                     installedApps: installedApps
                 )
-                .padding(.top, 16)
-
-                Spacer()
-
-                Text("Click a sector to configure.")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
+                .frame(maxHeight: .infinity)
             }
-            .frame(width: 220)
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .frame(width: 280)
 
             Divider()
 
-            // Right: editor using standard Form
-            Form {
-                SectorEditor(
-                    config: $sectorConfigs[selectedSectorIndex],
-                    index: selectedSectorIndex,
-                    installedApps: installedApps,
-                    onChooseApp: { showingAppPicker = true },
-                    onBrowsePath: { showingPathPicker = true }
-                )
-            }
-            .formStyle(.grouped)
+            // Right: editor
+            SectorEditorPanel(
+                config: $sectorConfigs[selectedSectorIndex],
+                index: selectedSectorIndex,
+                installedApps: installedApps,
+                onChooseApp: { showingAppPicker = true },
+                onBrowsePath: { showingPathPicker = true }
+            )
         }
     }
 }
@@ -402,56 +398,43 @@ private struct SectorRingPreview: View {
     @Binding var selectedIndex: Int
     let installedApps: [InstalledApp]
 
-    private let ringRadius: CGFloat = 65
-    private let dotSize: CGFloat = 36
+    private let ringRadius: CGFloat = 80
+    private let slotSize: CGFloat = 40
 
     var body: some View {
-        HStack {
-            Spacer()
-            GlassEffectContainer {
-            ZStack {
-                // Subtle connecting ring
-                Circle()
-                    .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
-                    .frame(width: ringRadius * 2, height: ringRadius * 2)
+        ZStack {
+            // Connecting ring — ellipse fill
+            Circle()
+                .fill(Color.secondary.opacity(0.04))
+                .frame(width: ringRadius * 2 + slotSize, height: ringRadius * 2 + slotSize)
+            Circle()
+                .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
+                .frame(width: ringRadius * 2 + slotSize, height: ringRadius * 2 + slotSize)
 
-                ForEach(configs.indices, id: \.self) { i in
-                    let angle = angleFor(index: i, total: configs.count)
-                    let x = cos(angle) * ringRadius
-                    let y = sin(angle) * ringRadius
-                    let isSelected = i == selectedIndex
+            ForEach(configs.indices, id: \.self) { i in
+                let angle = angleFor(index: i, total: configs.count)
+                let x = cos(angle) * ringRadius
+                let y = sin(angle) * ringRadius
+                let isSelected = i == selectedIndex
 
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                            selectedIndex = i
-                        }
-                    } label: {
-                        sectorIcon(for: configs[i])
-                            .frame(width: dotSize, height: dotSize)
-                            .glassEffect(
-                                isSelected ? .regular.tint(.accentColor).interactive() : .regular,
-                                in: .circle
-                            )
-                            .scaleEffect(isSelected ? 1.08 : 1.0)
-                    }
-                    .buttonStyle(.plain)
-                    .offset(x: x, y: y)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.75), value: selectedIndex)
+                Button {
+                    selectedIndex = i
+                } label: {
+                    sectorIcon(for: configs[i])
+                        .frame(width: slotSize, height: slotSize)
+                        .background(
+                            RoundedRectangle(cornerRadius: 9)
+                                .fill(Color(nsColor: .controlBackgroundColor))
+                                .shadow(color: .black.opacity(0.1), radius: 1.5, y: 0.5)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 9)
+                                .stroke(isSelected ? Color.accentColor : Color.secondary.opacity(0.15), lineWidth: isSelected ? 2 : 0.5)
+                        )
                 }
-
-                // Center label
-                VStack(spacing: 0) {
-                    Text("SECTOR")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.tertiary)
-                    Text("\(selectedIndex + 1)")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
+                .buttonStyle(.plain)
+                .offset(x: x, y: y)
             }
-            .frame(width: ringRadius * 2 + dotSize + 8, height: ringRadius * 2 + dotSize + 8)
-            } // GlassEffectContainer
-            Spacer()
         }
     }
 
@@ -465,105 +448,164 @@ private struct SectorRingPreview: View {
         switch config {
         case .recent:
             Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 15))
+                .font(.system(size: 16))
                 .foregroundStyle(.secondary)
         case .pinned(let bundleId, _, _):
             if let app = installedApps.first(where: { $0.bundleId == bundleId }) {
                 Image(nsImage: app.icon)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .padding(5)
+                    .padding(4)
             } else {
                 Image(systemName: "app.dashed")
-                    .font(.system(size: 15))
+                    .font(.system(size: 16))
                     .foregroundStyle(.secondary)
             }
         case .url:
             Image(systemName: "globe")
-                .font(.system(size: 15))
+                .font(.system(size: 16))
                 .foregroundStyle(.secondary)
         case .shellCommand:
             Image(systemName: "terminal.fill")
-                .font(.system(size: 15))
+                .font(.system(size: 16))
                 .foregroundStyle(.secondary)
         case .systemAction(let kind):
             Image(systemName: kind.sfSymbolName)
-                .font(.system(size: 15))
+                .font(.system(size: 16))
                 .foregroundStyle(.secondary)
         case .shortcut:
             Image(systemName: "command.square.fill")
-                .font(.system(size: 15))
+                .font(.system(size: 16))
                 .foregroundStyle(.secondary)
         case .openPath:
             Image(systemName: "folder.fill")
-                .font(.system(size: 15))
+                .font(.system(size: 16))
+                .foregroundStyle(.secondary)
+        case .translate:
+            Image(systemName: "translate")
+                .font(.system(size: 16))
                 .foregroundStyle(.secondary)
         }
     }
 }
 
-// MARK: - Sector Editor
+// MARK: - Right Panel Editor
 
-private enum SectorKind: String, CaseIterable {
-    case recent = "Recent App"
-    case pinned = "Open App"
-    case url = "URL"
-    case shellCommand = "Shell Command"
-    case systemAction = "System Action"
-    case shortcut = "Shortcut"
-    case openPath = "File or Folder"
-
-    init(from config: OrbitConfig.SectorConfig) {
-        switch config {
-        case .recent: self = .recent
-        case .pinned: self = .pinned
-        case .url: self = .url
-        case .shellCommand: self = .shellCommand
-        case .systemAction: self = .systemAction
-        case .shortcut: self = .shortcut
-        case .openPath: self = .openPath
-        }
-    }
-}
-
-// MARK: - Sector Editor
-
-private struct SectorEditor: View {
+private struct SectorEditorPanel: View {
     @Binding var config: OrbitConfig.SectorConfig
     let index: Int
     let installedApps: [InstalledApp]
     let onChooseApp: () -> Void
     let onBrowsePath: () -> Void
 
+    @State private var searchText = ""
+
     private var sectorKind: Binding<SectorKind> {
         Binding(
             get: { SectorKind(from: config) },
             set: { kind in
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                    switch kind {
-                    case .recent: config = .recent(index: 0)
-                    case .pinned: config = .pinned(bundleId: "", name: "", icon: nil)
-                    case .url: config = .url(name: "", url: "", icon: nil)
-                    case .shellCommand: config = .shellCommand(name: "", command: "", icon: nil)
-                    case .systemAction: config = .systemAction(action: .lockScreen)
-                    case .shortcut: config = .shortcut(name: "")
-                    case .openPath: config = .openPath(name: "", path: "", icon: nil)
-                    }
+                switch kind {
+                case .recent: config = .recent(index: 0)
+                case .pinned: config = .pinned(bundleId: "", name: "", icon: nil)
+                case .url: config = .url(name: "", url: "", icon: nil)
+                case .shellCommand: config = .shellCommand(name: "", command: "", icon: nil)
+                case .systemAction: config = .systemAction(action: .lockScreen)
+                case .shortcut: config = .shortcut(name: "")
+                case .openPath: config = .openPath(name: "", path: "", icon: nil)
+                case .translate: config = .translate
                 }
             }
         )
     }
 
+    private var filteredApps: [InstalledApp] {
+        guard !searchText.isEmpty else { return installedApps }
+        let q = searchText.lowercased()
+        return installedApps.filter {
+            $0.name.lowercased().contains(q) || $0.bundleId.lowercased().contains(q)
+        }
+    }
+
     var body: some View {
-        Section("Sector \(index + 1)") {
-            Picker("Action Type", selection: sectorKind) {
-                ForEach(SectorKind.allCases, id: \.self) { kind in
-                    Text(kind.rawValue).tag(kind)
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            HStack {
+                Text("Sector \(index + 1)")
+                    .font(.title3.bold())
+                Spacer()
+                Picker("", selection: sectorKind) {
+                    ForEach(SectorKind.allCases, id: \.self) { kind in
+                        Text(kind.rawValue).tag(kind)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 150)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 10)
+
+            Divider()
+
+            // Content
+            sectorContent
+        }
+    }
+
+    @ViewBuilder
+    private var sectorContent: some View {
+        switch config {
+        case .pinned:
+            appGridView
+
+        default:
+            Form {
+                sectorFields
+            }
+            .formStyle(.grouped)
+        }
+    }
+
+    private var selectedBundleId: String? {
+        if case .pinned(let bid, _, _) = config { return bid }
+        return nil
+    }
+
+    private var appGridView: some View {
+        VStack(spacing: 0) {
+            TextField("Search", text: $searchText)
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+
+            List {
+                ForEach(filteredApps) { app in
+                    appRow(app: app, isSelected: selectedBundleId == app.bundleId)
                 }
             }
+            .listStyle(.plain)
         }
+    }
 
-        sectorFields
+    private func appRow(app: InstalledApp, isSelected: Bool) -> some View {
+        Button {
+            config = .pinned(bundleId: app.bundleId, name: app.name, icon: nil)
+        } label: {
+            HStack(spacing: 10) {
+                Image(nsImage: app.icon)
+                    .resizable()
+                    .frame(width: 32, height: 32)
+                Text(app.name)
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.accentColor)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
     }
 
     @ViewBuilder
@@ -581,31 +623,6 @@ private struct SectorEditor: View {
                     }
                 } icon: {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                }
-            }
-
-        case .pinned(let bundleId, _, _):
-            Section("Application") {
-                if let app = installedApps.first(where: { $0.bundleId == bundleId }) {
-                    LabeledContent {
-                        Button("Change...", action: onChooseApp)
-                    } label: {
-                        Label {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(app.name).lineLimit(1)
-                                Text(app.bundleId)
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                                    .lineLimit(1)
-                            }
-                        } icon: {
-                            Image(nsImage: app.icon)
-                                .resizable()
-                                .frame(width: 24, height: 24)
-                        }
-                    }
-                } else {
-                    Button("Choose Application...", action: onChooseApp)
                 }
             }
 
@@ -681,6 +698,24 @@ private struct SectorEditor: View {
                     Text("Opens in Finder. Supports ~ for home directory.")
                 }
             }
+
+        case .translate:
+            Section {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Translate Selected Text")
+                            .fontWeight(.medium)
+                        Text("Translates the currently selected text. Chinese ↔ English auto-detected.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "translate")
+                }
+            }
+
+        default:
+            EmptyView()
         }
     }
 
@@ -728,6 +763,31 @@ private struct SectorEditor: View {
         Binding(get: { path }, set: { config = .openPath(name: name, path: $0, icon: nil) })
     }
 }
+
+private enum SectorKind: String, CaseIterable {
+    case recent = "Recent App"
+    case pinned = "Open App"
+    case url = "URL"
+    case shellCommand = "Shell Command"
+    case systemAction = "System Action"
+    case shortcut = "Shortcut"
+    case openPath = "File or Folder"
+    case translate = "Translate"
+
+    init(from config: OrbitConfig.SectorConfig) {
+        switch config {
+        case .recent: self = .recent
+        case .pinned: self = .pinned
+        case .url: self = .url
+        case .shellCommand: self = .shellCommand
+        case .systemAction: self = .systemAction
+        case .shortcut: self = .shortcut
+        case .openPath: self = .openPath
+        case .translate: self = .translate
+        }
+    }
+}
+
 
 // MARK: - Permission Row
 

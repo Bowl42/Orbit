@@ -64,6 +64,7 @@ struct OrbitConfig: Codable, Equatable, Sendable {
         case systemAction(action: SystemActionKind)
         case shortcut(name: String)
         case openPath(name: String, path: String, icon: IconConfig?)
+        case translate
 
         enum CodingKeys: String, CodingKey {
             case type, index, bundleId, name, icon, url, command, action, path
@@ -106,6 +107,8 @@ struct OrbitConfig: Codable, Equatable, Sendable {
                 let path = try container.decode(String.self, forKey: .path)
                 let icon = try container.decodeIfPresent(IconConfig.self, forKey: .icon)
                 self = .openPath(name: name, path: path, icon: icon)
+            case "translate":
+                self = .translate
             default:
                 throw DecodingError.dataCorruptedError(
                     forKey: .type, in: container,
@@ -146,6 +149,8 @@ struct OrbitConfig: Codable, Equatable, Sendable {
                 try container.encode(name, forKey: .name)
                 try container.encode(path, forKey: .path)
                 try container.encodeIfPresent(icon, forKey: .icon)
+            case .translate:
+                try container.encode("translate", forKey: .type)
             }
         }
     }

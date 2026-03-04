@@ -159,6 +159,15 @@ final class RadialMenuViewModel {
                     icon: resolveIcon(iconConfig: iconConfig, fallback: action.icon),
                     action: action
                 ))
+
+            case .translate:
+                let action = TranslateAction(id: "translate")
+                items.append(SectorItem(
+                    id: "translate",
+                    name: action.name,
+                    icon: resolveIcon(iconConfig: nil, fallback: action.icon),
+                    action: action
+                ))
             }
         }
 
