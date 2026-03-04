@@ -5,13 +5,19 @@ A macOS menubar utility that puts your most-used apps and text lookup one mouse 
 ## Features
 
 **Mouse Button 5 — App Ring**
-Hold mouse button 5 to show a radial ring of apps around the cursor. Click any icon to switch to that app (or launch it if it's not running). Click outside or press the button again to dismiss.
+Press mouse button 5 to show a radial ring of up to 8 app icons around the cursor. Click any icon to switch to that app (launching it if not running). Click outside or press button 5 again to dismiss.
 
 **Mouse Button 4 — Look Up**
-Press mouse button 4 to trigger macOS's native "Look Up" on the selected text or the word under the cursor.
+Press mouse button 4 to trigger macOS's native "Look Up" on the word under the cursor or selected text.
 
 **Configure Slots**
-Open *Ring → Configure Slots…* from the menubar to pin specific apps to fixed positions in the ring. Drag apps from the list on the right onto a slot. Click a slot to clear it.
+Open *Ring → Configure Slots…* from the menubar icon to pin apps to fixed positions in the ring.
+
+- The left panel shows all 8 slots arranged as a ring — matching what you'll see on screen
+- Tap a slot to select it, then tap an app icon to assign it
+- Or drag any app icon directly onto a slot
+- Hover a slot and click the ✕ badge to clear it
+- Unassigned slots auto-fill with currently running apps at ring open time
 
 ## Requirements
 
@@ -31,4 +37,4 @@ Requires Xcode command line tools and Swift.
 
 ## Permissions
 
-Ring uses the **Input Monitoring** permission to listen for mouse button 4/5 events globally. Without it the app will still launch but the mouse buttons won't work. Grant access in *System Settings → Privacy & Security → Input Monitoring*.
+Ring requires **Input Monitoring** permission to listen for mouse button 4/5 events system-wide. The app prompts on first launch. If you rebuild with ad-hoc signing, macOS may revoke the permission — re-grant it in *System Settings → Privacy & Security → Input Monitoring*.

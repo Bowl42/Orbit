@@ -3,20 +3,16 @@ import Combine
 
 class RingViewModel: ObservableObject {
     @Published var slots: [AppSlot] = []
+    @Published var customBundleIDs: [String?]
 
     static let maxSlots = 8
     private let defaultsKey = "customSlots"
 
-    /// Stored as array of bundle IDs; empty string means "no custom app for this slot"
-    var customBundleIDs: [String?] {
-        get {
-            guard let raw = UserDefaults.standard.stringArray(forKey: defaultsKey) else {
-                return Array(repeating: nil, count: Self.maxSlots)
-            }
-            return raw.map { $0.isEmpty ? nil : $0 }
-        }
-        set {
-            UserDefaults.standard.set(newValue.map { $0 ?? "" }, forKey: defaultsKey)
+    init() {
+        if let raw = UserDefaults.standard.stringArray(forKey: "customSlots") {
+            customBundleIDs = raw.map { $0.isEmpty ? nil : $0 }
+        } else {
+            customBundleIDs = Array(repeating: nil, count: Self.maxSlots)
         }
     }
 
@@ -24,19 +20,15 @@ class RingViewModel: ObservableObject {
         let customIDs = customBundleIDs
         let customSet = Set(customIDs.compactMap { $0 })
 
-        // Build slots from custom config
         var result: [AppSlot] = customIDs.prefix(Self.maxSlots).map { bid in
             guard let bid else { return AppSlot.empty }
             var slot = AppSlot.custom(bundleID: bid)
-            // Attach running instance if available
             slot.runningApp = runningApp(for: bid)
             return slot
         }
 
-        // Pad to max
         while result.count < Self.maxSlots { result.append(AppSlot.empty) }
 
-        // Running apps not already in custom slots
         let running = NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular }
             .filter { app in
@@ -44,7 +36,6 @@ class RingViewModel: ObservableObject {
                 return !customSet.contains(bid)
             }
 
-        // Fill empty slots
         var ri = 0
         for i in result.indices where result[i].isEmpty {
             guard ri < running.count else { break }
@@ -56,14 +47,17 @@ class RingViewModel: ObservableObject {
     }
 
     func setCustomSlot(at index: Int, bundleID: String?) {
-        var ids = customBundleIDs
-        while ids.count <= index { ids.append(nil) }
-        ids[index] = bundleID
-        customBundleIDs = ids
+        while customBundleIDs.count <= index { customBundleIDs.append(nil) }
+        customBundleIDs[index] = bundleID
+        persist()
     }
 
     func removeCustomSlot(at index: Int) {
         setCustomSlot(at: index, bundleID: nil)
+    }
+
+    private func persist() {
+        UserDefaults.standard.set(customBundleIDs.map { $0 ?? "" }, forKey: defaultsKey)
     }
 
     private func runningApp(for bundleID: String) -> NSRunningApplication? {
