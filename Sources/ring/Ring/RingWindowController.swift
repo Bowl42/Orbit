@@ -56,8 +56,8 @@ class RingWindowController {
         outsideMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
         ) { [weak self] event in
-            // button 5 (buttonNumber 4) is handled by toggle() via CGEventTap — don't double-close
-            guard event.buttonNumber != 4 else { return }
+            // button 4 (buttonNumber 3) is handled by toggle() via CGEventTap — don't double-close
+            guard event.buttonNumber != 3 else { return }
             self?.close()
         }
     }

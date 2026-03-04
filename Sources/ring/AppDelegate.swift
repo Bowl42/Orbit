@@ -87,8 +87,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func startMonitoring() {
         let monitor = MouseEventMonitor()
-        monitor.onButton5 = { [weak self] point in self?.ringController?.toggle(at: point) }
-        monitor.onButton4 = { _ in Self.lookupAtPointer() }
+        monitor.onButton4 = { [weak self] point in self?.ringController?.toggle(at: point) }
+        monitor.onButton5 = { _ in Self.lookupAtPointer() }
         monitor.start()
         mouseMonitor = monitor
     }
