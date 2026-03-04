@@ -31,8 +31,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem?.button?.image = NSImage(systemSymbolName: "circle.dotted",
-                                            accessibilityDescription: "Ring")
+        if let image = Bundle.main.image(forResource: "ring") {
+            image.size = NSSize(width: 18, height: 18)
+            statusItem?.button?.image = image
+        }
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Test Ring", action: #selector(showTestRing), keyEquivalent: ""))
