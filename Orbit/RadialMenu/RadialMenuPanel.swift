@@ -4,9 +4,8 @@ import SwiftUI
 final class RadialMenuPanel: NSPanel {
 
     init() {
-        // Increased contentRect to allow breathing room for shadows and scale animations
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 500),
+            contentRect: NSRect(x: 0, y: 0, width: 340, height: 340),
             styleMask: [.nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
             defer: true
@@ -41,14 +40,31 @@ final class RadialMenuPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
+    @MainActor
     func setContent<Content: View>(@ViewBuilder _ content: () -> Content) {
+        let effectView = NSVisualEffectView()
+        effectView.material = .hudWindow
+        effectView.blendingMode = .behindWindow
+        effectView.state = .active
+        effectView.wantsLayer = true
+        effectView.layer?.cornerRadius = 170 // 对应 340 宽度的半径
+        effectView.layer?.masksToBounds = true
+        
         let hostingView = NSHostingView(rootView: content().ignoresSafeArea())
-        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
-        self.contentView = hostingView
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        
+        effectView.addSubview(hostingView)
+        self.contentView = effectView
+
+        NSLayoutConstraint.activate([
+            hostingView.centerXAnchor.constraint(equalTo: effectView.centerXAnchor),
+            hostingView.centerYAnchor.constraint(equalTo: effectView.centerYAnchor),
+            hostingView.widthAnchor.constraint(equalToConstant: 340),
+            hostingView.heightAnchor.constraint(equalToConstant: 340)
+        ])
     }
 
-    /// Shows the panel centered on the mouse and returns the actual center point
-    /// (which may differ from the mouse if the panel was clamped to screen edges).
+    @MainActor
     @discardableResult
     func showAtMouseLocation() -> CGPoint {
         alphaValue = 1
@@ -66,7 +82,7 @@ final class RadialMenuPanel: NSPanel {
             let vis = screen.visibleFrame
             finalOrigin = CGPoint(
                 x: min(max(origin.x, vis.minX), vis.maxX - size.width),
-                y: min(max(origin.y, vis.minY), vis.maxY - size.height),
+                y: min(max(origin.y, vis.minY), vis.maxY - size.height)
             )
         } else {
             finalOrigin = origin
@@ -75,22 +91,22 @@ final class RadialMenuPanel: NSPanel {
         setFrameOrigin(finalOrigin)
         orderFront(nil)
 
-        // Return the actual center of the panel after clamping
         return CGPoint(
             x: finalOrigin.x + size.width / 2,
             y: finalOrigin.y + size.height / 2
         )
     }
 
+    @MainActor
     func dismiss() {
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.2
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            context.duration = 0.12
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             self.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
             DispatchQueue.main.async {
                 self?.orderOut(nil)
-                self?.alphaValue = 1  // Reset for next show
+                self?.alphaValue = 1
             }
         })
     }

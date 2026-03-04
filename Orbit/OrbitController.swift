@@ -10,14 +10,14 @@ final class OrbitController {
     let viewModel: RadialMenuViewModel
 
     private var panel: RadialMenuPanel?
-    private var mouseMonitor: Any?
+    private var globalMonitor: Any?
+    private var localMonitor: Any?
 
     init() {
         configManager = ConfigManager()
         recentAppsTracker = RecentAppsTracker()
         hotkeyManager = HotkeyManager()
         viewModel = RadialMenuViewModel()
-
         setupHotkey()
     }
 
@@ -27,46 +27,54 @@ final class OrbitController {
 
     private func setupHotkey() {
         applyHotkey()
-
         hotkeyManager.onHotkeyDown = { [weak self] in
-            MainActor.assumeIsolated {
-                self?.showMenu()
-            }
+            MainActor.assumeIsolated { self?.showMenu() }
         }
-
         hotkeyManager.onHotkeyUp = { [weak self] in
-            MainActor.assumeIsolated {
-                self?.hideMenuAndExecute()
-            }
+            MainActor.assumeIsolated { self?.hideMenuAndExecute() }
         }
     }
 
     func startListening() {
-        if !hotkeyManager.start() {
-            print("Hotkey manager failed to start. Check Input Monitoring permission.")
-        }
+        _ = hotkeyManager.start()
     }
 
     private func showMenu() {
+        // Build sectors first
         viewModel.buildSectors(
             config: configManager.config,
             recentApps: recentAppsTracker.topRecent(configManager.config.sectorCount)
         )
         viewModel.selectedIndex = nil
-        viewModel.isVisible = true
-
+        
+        // Setup panel
         let panel = RadialMenuPanel()
         panel.setContent {
             RadialMenuView(viewModel: self.viewModel)
         }
-        // Use the actual panel center (accounts for screen-edge clamping)
-        viewModel.centerPoint = panel.showAtMouseLocation()
+        
+        // 1. Capture exact center point in screen coordinates
+        let actualCenter = panel.showAtMouseLocation()
+        viewModel.centerPoint = actualCenter
         self.panel = panel
 
-        mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged]) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.viewModel.updateSelection(mouseLocation: NSEvent.mouseLocation)
+        // 2. Clear old monitors if they exist
+        clearMonitors()
+
+        // 3. Add new monitors - capture self weakly but run safely on MainActor
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.viewModel.updateSelection(mouseLocation: NSEvent.mouseLocation)
             }
+        }
+        
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] event in
+            guard let self else { return event }
+            Task { @MainActor in
+                self.viewModel.updateSelection(mouseLocation: NSEvent.mouseLocation)
+            }
+            return event
         }
     }
 
@@ -74,21 +82,32 @@ final class OrbitController {
         let selectedIndex = viewModel.selectedIndex
         let sectors = viewModel.sectors
 
-        if let monitor = mouseMonitor {
-            NSEvent.removeMonitor(monitor)
-        }
-        mouseMonitor = nil
+        // 1. Clear monitors immediately
+        clearMonitors()
 
-        viewModel.isVisible = false
-        viewModel.selectedIndex = nil
+        // 2. Dismiss panel
         panel?.dismiss()
         panel = nil
 
-        if let index = selectedIndex, index < sectors.count,
-           let action = sectors[index].action {
+        // 3. Execute action asynchronously
+        if let index = selectedIndex, index < sectors.count, let action = sectors[index].action {
             Task {
                 await action.execute()
             }
+        }
+        
+        // 4. Reset VM state
+        viewModel.selectedIndex = nil
+    }
+
+    private func clearMonitors() {
+        if let gm = globalMonitor {
+            NSEvent.removeMonitor(gm)
+            globalMonitor = nil
+        }
+        if let lm = localMonitor {
+            NSEvent.removeMonitor(lm)
+            localMonitor = nil
         }
     }
 }

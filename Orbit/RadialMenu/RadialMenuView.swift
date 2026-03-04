@@ -2,186 +2,165 @@ import SwiftUI
 
 struct RadialMenuView: View {
     let viewModel: RadialMenuViewModel
-
     @State private var isAppearing = false
 
-    private let windowSize: CGFloat = 500
-    private let outerRadius: CGFloat = 205
-    private let innerRadius: CGFloat = 65
-    private let centerRadius: CGFloat = 52
-    private let iconRingRadius: CGFloat = 135
+    private let size: CGFloat = 340
+    private let iconRadius: CGFloat = 114
+    private let innerRadius: CGFloat = 58
 
     var body: some View {
         ZStack {
-            // Static layers (never re-rendered on selection change)
-            staticBackground
+            // 1. 高亮层
+            selectionHighlightLayer
 
-            // Selection-dependent layers
-            sectorHighlights
-            centerInfo
-            sectorIcons
+            // 2. 装饰层
+            backgroundDecorLayer
+
+            // 3. 图标层
+            iconLayer
+
+            // 4. 中心枢纽
+            CenterHub(
+                selectedItem: viewModel.selectedIndex != nil ? viewModel.sectors[viewModel.selectedIndex!] : nil,
+                radius: innerRadius
+            )
+            .scaleEffect(isAppearing ? 1 : 0.85)
         }
-        .frame(width: windowSize, height: windowSize)
-        .scaleEffect(isAppearing ? 1 : 0.85)
+        .frame(width: size, height: size)
         .opacity(isAppearing ? 1 : 0)
-        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isAppearing)
         .onAppear { isAppearing = true }
+        .onChange(of: viewModel.selectedIndex) { old, new in
+            if old != new, new != nil {
+                NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+            }
+        }
     }
 
-    // MARK: - Static background (drawn once, never redrawn)
+    // MARK: - Subviews
 
-    private var staticBackground: some View {
+    private var selectionHighlightLayer: some View {
+        Canvas { context, sz in
+            guard let selectedIndex = viewModel.selectedIndex else { return }
+            let count = viewModel.sectors.count
+            guard count > 0 else { return }
+
+            let step = 360.0 / Double(count)
+            let startAngle = Angle.degrees(-90 + step * Double(selectedIndex) - step / 2 + 0.5)
+            let endAngle = Angle.degrees(-90 + step * Double(selectedIndex) + step / 2 - 0.5)
+
+            let center = CGPoint(x: sz.width / 2, y: sz.height / 2)
+            var path = Path()
+            path.addArc(center: center, radius: sz.width / 2 - 2, startAngle: startAngle, endAngle: endAngle, clockwise: false)
+            path.addArc(center: center, radius: innerRadius + 2, startAngle: endAngle, endAngle: startAngle, clockwise: true)
+            path.closeSubpath()
+
+            // Tahoe 风格：乳白色微透高光
+            context.fill(path, with: .color(Color.primary.opacity(0.08)))
+            
+            var rim = Path()
+            rim.addArc(center: center, radius: sz.width / 2 - 3, startAngle: startAngle, endAngle: endAngle, clockwise: false)
+            context.stroke(rim, with: .color(Color.primary.opacity(0.12)), style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
+        }
+        .animation(.spring(response: 0.25, dampingFraction: 0.75), value: viewModel.selectedIndex)
+    }
+
+    private var backgroundDecorLayer: some View {
         ZStack {
             Circle()
-                .fill(.ultraThinMaterial)
-                .frame(width: outerRadius * 2, height: outerRadius * 2)
-                .overlay(
-                    Circle().stroke(.white.opacity(0.15), lineWidth: 0.5)
-                )
-                .shadow(color: .black.opacity(0.4), radius: 20, x: 0, y: 10)
-
+                .stroke(Color.primary.opacity(0.02), lineWidth: 1)
+                .frame(width: size, height: size)
+            
             if viewModel.sectors.count > 1 {
-                ForEach(0..<viewModel.sectors.count, id: \.self) { index in
-                    let startAngle = sectorStartAngle(for: index)
-                    SectorDivider(angle: startAngle, innerRadius: innerRadius, outerRadius: outerRadius)
-                        .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+                ForEach(0..<viewModel.sectors.count, id: \.self) { i in
+                    DividerDot(index: i, count: viewModel.sectors.count, radius: size / 2 - 4)
+                        .fill(Color.primary.opacity(0.08))
+                        .frame(width: 2, height: 2)
                 }
             }
         }
         .drawingGroup()
     }
 
-    // MARK: - Sector highlights (lightweight fill changes)
-
-    private var sectorHighlights: some View {
-        Canvas { context, size in
-            let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            guard let selected = viewModel.selectedIndex, !viewModel.sectors.isEmpty else { return }
-
-            let count = viewModel.sectors.count
-            let step = 360.0 / Double(count)
-            let start = Angle.degrees(-90 + step * Double(selected) - step / 2)
-            let end = Angle.degrees(-90 + step * Double(selected) + step / 2)
-
-            var path = Path()
-            path.addArc(center: center, radius: outerRadius, startAngle: start, endAngle: end, clockwise: false)
-            path.addArc(center: center, radius: innerRadius, startAngle: end, endAngle: start, clockwise: true)
-            path.closeSubpath()
-
-            context.fill(path, with: .color(.accentColor.opacity(0.25)))
-        }
-        .allowsHitTesting(false)
-    }
-
-    // MARK: - Center info
-
-    private var centerInfo: some View {
-        ZStack {
-            Circle()
-                .fill(.ultraThinMaterial)
-                .frame(width: centerRadius * 2, height: centerRadius * 2)
-                .overlay(
-                    Circle().stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
-                )
-
-            VStack(spacing: 4) {
-                if let index = viewModel.selectedIndex, index < viewModel.sectors.count {
-                    if let icon = viewModel.sectors[index].icon {
-                        Image(nsImage: icon)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 26, height: 26)
-                            .id("icon-\(viewModel.sectors[index].id)")
-                    }
-                    Text(viewModel.sectors[index].name)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .padding(.horizontal, 6)
-                        .id("text-\(viewModel.sectors[index].id)")
-                } else {
-                    Image(systemName: "circle.grid.cross")
-                        .font(.system(size: 24, weight: .light))
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
-    // MARK: - Sector icons
-
-    private var sectorIcons: some View {
+    private var iconLayer: some View {
         ForEach(Array(viewModel.sectors.enumerated()), id: \.element.id) { index, item in
-            let angle = iconAngle(for: index)
             SectorView(
                 item: item,
                 isSelected: viewModel.selectedIndex == index,
-                index: index,
-                count: viewModel.sectors.count,
-                innerRadius: innerRadius,
-                outerRadius: outerRadius,
-                angle: angle,
-                radius: iconRingRadius
+                angle: iconAngle(for: index),
+                radius: iconRadius,
+                delay: Double(index) * 0.03
             )
-            .opacity(isAppearing ? 1 : 0)
-            .scaleEffect(isAppearing ? 1 : 0.4)
-            .rotationEffect(isAppearing ? .zero : .degrees(20))
-            .animation(.spring(response: 0.4, dampingFraction: 0.6).delay(Double(index) * 0.02), value: isAppearing)
         }
     }
 
-    // MARK: - Geometry helpers
-
     private func iconAngle(for index: Int) -> Angle {
-        let count = viewModel.sectors.count
-        guard count > 0 else { return .zero }
-        let step = 360.0 / Double(count)
-        return .degrees(90 - step * Double(index))
-    }
-
-    private func sectorStartAngle(for index: Int) -> Angle {
-        let count = viewModel.sectors.count
-        let step = 360.0 / Double(count)
-        return .degrees(-90 + step * Double(index) - step / 2)
+        let step = 360.0 / Double(max(1, viewModel.sectors.count))
+        return Angle.degrees(90 - step * Double(index))
     }
 }
 
-// MARK: - Sector wedge shape
-
-struct SectorWedge: Shape {
+// 分隔装饰点
+struct DividerDot: Shape {
     let index: Int
     let count: Int
-    let innerRadius: CGFloat
-    let outerRadius: CGFloat
-
+    let radius: CGFloat
+    
     func path(in rect: CGRect) -> Path {
         let center = CGPoint(x: rect.midX, y: rect.midY)
         let step = 360.0 / Double(count)
-        let start = Angle.degrees(-90 + step * Double(index) - step / 2)
-        let end = Angle.degrees(-90 + step * Double(index) + step / 2)
-
+        let angle = Angle.degrees(-90 + step * Double(index) - step / 2).radians
+        let x = center.x + cos(angle) * radius
+        let y = center.y + sin(angle) * radius
+        
         var path = Path()
-        path.addArc(center: center, radius: outerRadius, startAngle: start, endAngle: end, clockwise: false)
-        path.addArc(center: center, radius: innerRadius, startAngle: end, endAngle: start, clockwise: true)
-        path.closeSubpath()
+        path.addEllipse(in: CGRect(x: x - 1, y: y - 1, width: 2, height: 2))
         return path
     }
 }
 
-// MARK: - Sector divider line
+// MARK: - 中心枢纽 (Tahoe Glass Lens)
+struct CenterHub: View {
+    let selectedItem: RadialMenuViewModel.SectorItem?
+    let radius: CGFloat
 
-struct SectorDivider: Shape {
-    let angle: Angle
-    let innerRadius: CGFloat
-    let outerRadius: CGFloat
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(.ultraThinMaterial)
+                .frame(width: radius * 2, height: radius * 2)
+                .overlay(
+                    Circle()
+                        .stroke(
+                            LinearGradient(colors: [.primary.opacity(0.15), .primary.opacity(0.02)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                            lineWidth: 1.2
+                        )
+                )
+                .shadow(color: .black.opacity(0.12), radius: 12, y: 8)
 
-    func path(in rect: CGRect) -> Path {
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let cosVal = cos(angle.radians)
-        let sinVal = sin(angle.radians)
-        var path = Path()
-        path.move(to: CGPoint(x: center.x + cosVal * innerRadius, y: center.y + sinVal * innerRadius))
-        path.addLine(to: CGPoint(x: center.x + cosVal * outerRadius, y: center.y + sinVal * outerRadius))
-        return path
+            VStack(spacing: 3) {
+                if let item = selectedItem {
+                    if let icon = item.icon {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 28, height: 28)
+                            .clipShape(RoundedRectangle(cornerRadius: 7))
+                            .transition(.scale(0.8).combined(with: .opacity))
+                    }
+                    Text(item.name)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .frame(width: radius * 1.6)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.primary)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else {
+                    Image(systemName: "circle.grid.cross.fill")
+                        .font(.system(size: 24, weight: .ultraLight))
+                        .foregroundStyle(.primary.opacity(0.2))
+                }
+            }
+            .animation(.spring(response: 0.25, dampingFraction: 0.8), value: selectedItem?.id)
+        }
     }
 }
