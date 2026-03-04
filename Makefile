@@ -14,7 +14,7 @@ build:
 	codesign --force --deep --sign - $(APP)
 
 run: build
-	-killall ring 2>/dev/null; open $(APP)
+	open $(APP)
 
 clean:
 	rm -rf $(APP)

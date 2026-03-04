@@ -19,15 +19,6 @@ struct RingView: View {
                 .contentShape(Rectangle())
                 .onTapGesture { onDismiss() }
 
-            // Glass background — Orbit-style dark ultraThinMaterial circle
-            Circle()
-                .fill(.ultraThinMaterial)
-                .environment(\.colorScheme, .dark)
-                .frame(width: 260, height: 260)
-                .shadow(color: .black.opacity(0.5), radius: 30, x: 0, y: 15)
-                .overlay(Circle().stroke(.white.opacity(0.15), lineWidth: 0.5))
-                .onTapGesture { onDismiss() }
-
             // App icons
             ForEach(Array(viewModel.slots.enumerated()), id: \.element.id) { index, slot in
                 let angle = slotAngle(index: index, total: viewModel.slots.count)
@@ -65,10 +56,9 @@ struct AppIconView: View {
 
     var body: some View {
         ZStack {
-            Circle()
-                .fill(isHovered ? Color(red: 0.1, green: 0.7, blue: 1.0).opacity(0.25) : Color.clear)
-                .blur(radius: isHovered ? 8 : 0)
-                .frame(width: size + 16, height: size + 16)
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isHovered ? Color.white.opacity(0.25) : Color.clear)
+                .frame(width: size + 10, height: size + 10)
 
             if let icon = slot.icon {
                 Image(nsImage: icon)

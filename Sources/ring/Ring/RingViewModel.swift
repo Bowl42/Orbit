@@ -4,7 +4,7 @@ import Combine
 class RingViewModel: ObservableObject {
     @Published var slots: [AppSlot] = []
 
-    static let maxSlots = 10
+    static let maxSlots = 8
     private let defaultsKey = "customSlots"
 
     /// Stored as array of bundle IDs; empty string means "no custom app for this slot"

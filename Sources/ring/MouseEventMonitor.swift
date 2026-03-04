@@ -10,47 +10,44 @@ class MouseEventMonitor {
     private var nsMonitor: Any?
 
     static func hasPermission() -> Bool {
-        AXIsProcessTrusted() || CGPreflightListenEventAccess()
+        let mask: CGEventMask = 1 << CGEventType.otherMouseDown.rawValue
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap, place: .headInsertEventTap,
+            options: .listenOnly, eventsOfInterest: mask,
+            callback: { _, _, e, _ in Unmanaged.passUnretained(e) },
+            userInfo: nil
+        ) else { return false }
+        CFMachPortInvalidate(tap)
+        return true
     }
 
     func start() {
-        print("[Ring] AXTrusted=\(AXIsProcessTrusted()) ListenAccess=\(CGPreflightListenEventAccess())")
-        startEventTap()
-        if tap == nil {
-            startNSMonitor()   // fallback only if CGEventTap failed
-        }
-    }
-
-    // MARK: - CGEventTap
-
-    private func startEventTap() {
-        let mask: CGEventMask = (1 << CGEventType.otherMouseDown.rawValue)
+        let mask: CGEventMask = 1 << CGEventType.otherMouseDown.rawValue
         let refcon = Unmanaged.passUnretained(self).toOpaque()
 
-        // Try annotated session tap first, fall back to plain session tap
-        tap = CGEvent.tapCreate(tap: .cgAnnotatedSessionEventTap, place: .headInsertEventTap,
-                                options: .listenOnly, eventsOfInterest: mask,
-                                callback: cgCallback, userInfo: refcon)
-            ?? CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
-                                 options: .listenOnly, eventsOfInterest: mask,
-                                 callback: cgCallback, userInfo: refcon)
+        tap = CGEvent.tapCreate(
+            tap: .cgAnnotatedSessionEventTap, place: .headInsertEventTap,
+            options: .listenOnly, eventsOfInterest: mask,
+            callback: cgCallback, userInfo: refcon)
+            ?? CGEvent.tapCreate(
+            tap: .cgSessionEventTap, place: .headInsertEventTap,
+            options: .listenOnly, eventsOfInterest: mask,
+            callback: cgCallback, userInfo: refcon)
 
         if let tap {
             runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
             CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
             CGEvent.tapEnable(tap: tap, enable: true)
-            print("[Ring] CGEventTap started")
+            log("[Ring] CGEventTap started")
         } else {
-            print("[Ring] CGEventTap failed — relying on NSEvent monitor")
+            log("[Ring] CGEventTap failed — falling back to NSEvent monitor")
+            startNSMonitor()
         }
     }
-
-    // MARK: - NSEvent fallback
 
     private func startNSMonitor() {
         nsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .otherMouseDown) { [weak self] event in
             let btn = event.buttonNumber
-            print("[Ring] NSEvent buttonNumber: \(btn)")
             let loc = NSEvent.mouseLocation
             switch btn {
             case 3: self?.onButton4?(loc)
@@ -58,10 +55,8 @@ class MouseEventMonitor {
             default: break
             }
         }
-        print("[Ring] NSEvent monitor \(nsMonitor == nil ? "failed" : "started")")
+        log("[Ring] NSEvent monitor \(nsMonitor == nil ? "FAILED" : "started")")
     }
-
-    // MARK: - Re-enable / stop
 
     func reenable() {
         if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
@@ -83,18 +78,18 @@ private func cgCallback(
     proxy: CGEventTapProxy, type: CGEventType,
     event: CGEvent, refcon: UnsafeMutableRawPointer?
 ) -> Unmanaged<CGEvent>? {
+    guard let refcon else { return Unmanaged.passUnretained(event) }
+    let monitor = Unmanaged<MouseEventMonitor>.fromOpaque(refcon).takeUnretainedValue()
+
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-        if let refcon {
-            Unmanaged<MouseEventMonitor>.fromOpaque(refcon).takeUnretainedValue().reenable()
-        }
+        monitor.reenable()
         return nil
     }
-    guard let refcon, type == .otherMouseDown else { return Unmanaged.passRetained(event) }
+    guard type == .otherMouseDown else { return Unmanaged.passUnretained(event) }
 
-    let monitor = Unmanaged<MouseEventMonitor>.fromOpaque(refcon).takeUnretainedValue()
     let btn = event.getIntegerValueField(.mouseEventButtonNumber)
-    print("[Ring] CGEvent buttonNumber: \(btn)")
     let loc = NSEvent.mouseLocation
+    log("[Ring] CGEvent otherMouseDown btn=\(btn)")
     DispatchQueue.main.async {
         switch btn {
         case 3: monitor.onButton4?(loc)
@@ -102,5 +97,5 @@ private func cgCallback(
         default: break
         }
     }
-    return Unmanaged.passRetained(event)
+    return Unmanaged.passUnretained(event)
 }

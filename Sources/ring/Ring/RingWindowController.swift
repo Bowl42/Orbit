@@ -15,14 +15,14 @@ class RingWindowController {
     }
 
     func show(at point: NSPoint) {
-        print("[Ring] show() start")
+        log("[Ring] show() start")
         viewModel.refresh()
-        print("[Ring] refresh done, slots: \(viewModel.slots.count)")
+        log("[Ring] refresh done, slots: \(viewModel.slots.count)")
         previousApp = NSWorkspace.shared.frontmostApplication
 
         let size = CGSize(width: 280, height: 280)
         let origin = clampedOrigin(from: point, size: size)
-        print("[Ring] origin: \(origin)")
+        log("[Ring] origin: \(origin)")
 
         let w = NSPanel(
             contentRect: NSRect(origin: origin, size: size),
@@ -30,14 +30,14 @@ class RingWindowController {
             backing: .buffered,
             defer: false
         )
-        print("[Ring] window created")
+        log("[Ring] window created")
         w.isOpaque = false
         w.backgroundColor = .clear
         w.level = .floating
         w.animationBehavior = .none
         w.collectionBehavior = [.canJoinAllSpaces, .stationary]
         w.hasShadow = false
-        print("[Ring] before NSHostingView")
+        log("[Ring] before NSHostingView")
         w.contentView = NSHostingView(
             rootView: RingView(
                 viewModel: viewModel,
@@ -45,17 +45,21 @@ class RingWindowController {
                 onActivate: { [weak self] slot in self?.activate(slot) }
             )
         )
-        print("[Ring] before orderFront")
+        log("[Ring] before orderFront")
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         w.orderFront(nil)
         CATransaction.commit()
         window = w
-        print("[Ring] window shown")
+        log("[Ring] window shown")
 
         outsideMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        ) { [weak self] _ in self?.close() }
+        ) { [weak self] event in
+            // button 5 (buttonNumber 4) is handled by toggle() via CGEventTap — don't double-close
+            guard event.buttonNumber != 4 else { return }
+            self?.close()
+        }
     }
 
     func activate(_ slot: AppSlot) {

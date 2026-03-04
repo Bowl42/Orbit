@@ -1,10 +1,10 @@
 import AppKit
 
-print("[Ring] main start")
+log("[Ring] main start")
 let app = NSApplication.shared
-print("[Ring] app created")
+log("[Ring] app created")
 let delegate = AppDelegate()
-print("[Ring] delegate created")
+log("[Ring] delegate created")
 app.delegate = delegate
-print("[Ring] app.run()")
+log("[Ring] app.run()")
 app.run()

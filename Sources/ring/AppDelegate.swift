@@ -10,7 +10,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var quickActionsController: QuickActionsWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        print("[Ring] applicationDidFinishLaunching")
+        log("[Ring] applicationDidFinishLaunching")
         NSApp.setActivationPolicy(.accessory)
 
         ringController = RingWindowController()
@@ -20,7 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let perm = PermissionWindowController()
         perm.onGranted = { [weak self] in
-            print("[Ring] permission granted, starting monitor")
+            log("[Ring] permission granted, starting monitor")
             self?.startMonitoring()
         }
         perm.showIfNeeded()
@@ -31,10 +31,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        if let image = Bundle.main.image(forResource: "ring") {
-            image.size = NSSize(width: 18, height: 18)
-            statusItem?.button?.image = image
-        }
+        let menubarIcon = Bundle.main.url(forResource: "ring", withExtension: "icns")
+            .flatMap { NSImage(contentsOf: $0) }
+            ?? NSImage(systemSymbolName: "circle.dotted", accessibilityDescription: "Ring")
+        menubarIcon?.size = NSSize(width: 18, height: 18)
+        statusItem?.button?.image = menubarIcon
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Test Ring", action: #selector(showTestRing), keyEquivalent: ""))
@@ -51,7 +52,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func showTestRing() {
         let point = NSEvent.mouseLocation
-        print("[Ring] showTestRing at \(point)")
+        log("[Ring] showTestRing at \(point)")
         ringController?.show(at: point)
     }
 
