@@ -12,6 +12,7 @@ final class RadialMenuViewModel {
     var centerPoint: CGPoint = .zero
 
     private let deadZoneRadius: CGFloat = 30
+    private let outerBoundaryRadius: CGFloat = 205
 
     struct SectorItem: Identifiable {
         let id: String
@@ -28,6 +29,12 @@ final class RadialMenuViewModel {
         let distance = sqrt(dx * dx + dy * dy)
 
         guard distance > deadZoneRadius else {
+            selectedIndex = nil
+            return
+        }
+
+        // Mouse outside the ring — no selection
+        guard distance < outerBoundaryRadius else {
             selectedIndex = nil
             return
         }

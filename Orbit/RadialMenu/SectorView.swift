@@ -20,28 +20,15 @@ struct SectorView: View {
                         : Color.clear
                 )
 
-            // Icon with Liquid Glass circular backing
-            // .drawingGroup() isolates the glass rendering so the icon stays sharp
-            ZStack {
-                Circle()
-                    .glassEffect(
-                        isSelected
-                            ? .regular.tint(.accentColor).interactive()
-                            : .regular,
-                        in: .circle
-                    )
-                    .drawingGroup()
-
-                iconContent
-            }
-            .frame(width: 64, height: 64)
-            .scaleEffect(isSelected ? 1.15 : 1.0)
-            .offset(
-                x: cos(angle.radians) * radius,
-                y: -sin(angle.radians) * radius
-            )
+            // Icon
+            iconContent
+                .scaleEffect(isSelected ? 1.15 : 1.0)
+                .shadow(color: .black.opacity(isSelected ? 0.5 : 0.2), radius: isSelected ? 6 : 3, y: isSelected ? 4 : 2)
+                .offset(
+                    x: cos(angle.radians) * radius,
+                    y: -sin(angle.radians) * radius
+                )
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
         .zIndex(isSelected ? 1 : 0)
     }
 

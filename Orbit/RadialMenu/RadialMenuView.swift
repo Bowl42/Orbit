@@ -13,7 +13,25 @@ struct RadialMenuView: View {
 
     var body: some View {
         ZStack {
-            // Layer 1: Frosted glass background — ultraThinMaterial for large-area translucency
+            // Static layers (never re-rendered on selection change)
+            staticBackground
+
+            // Selection-dependent layers
+            sectorHighlights
+            centerInfo
+            sectorIcons
+        }
+        .frame(width: windowSize, height: windowSize)
+        .scaleEffect(isAppearing ? 1 : 0.85)
+        .opacity(isAppearing ? 1 : 0)
+        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isAppearing)
+        .onAppear { isAppearing = true }
+    }
+
+    // MARK: - Static background (drawn once, never redrawn)
+
+    private var staticBackground: some View {
+        ZStack {
             Circle()
                 .fill(.ultraThinMaterial)
                 .frame(width: outerRadius * 2, height: outerRadius * 2)
@@ -22,23 +40,6 @@ struct RadialMenuView: View {
                 )
                 .shadow(color: .black.opacity(0.4), radius: 20, x: 0, y: 10)
 
-            // Layer 2: Sector highlight wedges
-            ForEach(Array(viewModel.sectors.enumerated()), id: \.element.id) { index, _ in
-                SectorWedge(
-                    index: index,
-                    count: viewModel.sectors.count,
-                    innerRadius: innerRadius,
-                    outerRadius: outerRadius
-                )
-                .fill(
-                    viewModel.selectedIndex == index
-                        ? Color.accentColor.opacity(0.25)
-                        : Color.clear
-                )
-                .animation(.easeOut(duration: 0.15), value: viewModel.selectedIndex)
-            }
-
-            // Layer 3: Sector divider lines
             if viewModel.sectors.count > 1 {
                 ForEach(0..<viewModel.sectors.count, id: \.self) { index in
                     let startAngle = sectorStartAngle(for: index)
@@ -46,69 +47,90 @@ struct RadialMenuView: View {
                         .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
                 }
             }
+        }
+        .drawingGroup()
+    }
 
-            // Layer 4: Center circle — uses material (not glass) to avoid glass-on-glass
-            ZStack {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: centerRadius * 2, height: centerRadius * 2)
-                    .overlay(
-                        Circle().stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
-                    )
+    // MARK: - Sector highlights (lightweight fill changes)
 
-                VStack(spacing: 4) {
-                    if let index = viewModel.selectedIndex, index < viewModel.sectors.count {
-                        if let icon = viewModel.sectors[index].icon {
-                            Image(nsImage: icon)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 26, height: 26)
-                                .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
-                                .transition(.scale(scale: 0.8).combined(with: .opacity))
-                                .id("icon-\(viewModel.sectors[index].id)")
-                        }
-                        Text(viewModel.sectors[index].name)
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .padding(.horizontal, 6)
-                            .transition(.opacity)
-                            .id("text-\(viewModel.sectors[index].id)")
-                    } else {
-                        Image(systemName: "circle.grid.cross")
-                            .font(.system(size: 24, weight: .light))
-                            .foregroundStyle(.secondary)
-                            .transition(.opacity)
+    private var sectorHighlights: some View {
+        Canvas { context, size in
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            guard let selected = viewModel.selectedIndex, !viewModel.sectors.isEmpty else { return }
+
+            let count = viewModel.sectors.count
+            let step = 360.0 / Double(count)
+            let start = Angle.degrees(-90 + step * Double(selected) - step / 2)
+            let end = Angle.degrees(-90 + step * Double(selected) + step / 2)
+
+            var path = Path()
+            path.addArc(center: center, radius: outerRadius, startAngle: start, endAngle: end, clockwise: false)
+            path.addArc(center: center, radius: innerRadius, startAngle: end, endAngle: start, clockwise: true)
+            path.closeSubpath()
+
+            context.fill(path, with: .color(.accentColor.opacity(0.25)))
+        }
+        .allowsHitTesting(false)
+    }
+
+    // MARK: - Center info
+
+    private var centerInfo: some View {
+        ZStack {
+            Circle()
+                .fill(.ultraThinMaterial)
+                .frame(width: centerRadius * 2, height: centerRadius * 2)
+                .overlay(
+                    Circle().stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+                )
+
+            VStack(spacing: 4) {
+                if let index = viewModel.selectedIndex, index < viewModel.sectors.count {
+                    if let icon = viewModel.sectors[index].icon {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 26, height: 26)
+                            .id("icon-\(viewModel.sectors[index].id)")
                     }
+                    Text(viewModel.sectors[index].name)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .padding(.horizontal, 6)
+                        .id("text-\(viewModel.sectors[index].id)")
+                } else {
+                    Image(systemName: "circle.grid.cross")
+                        .font(.system(size: 24, weight: .light))
+                        .foregroundStyle(.secondary)
                 }
             }
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedIndex)
-
-            // Layer 5: Sector icons
-            ForEach(Array(viewModel.sectors.enumerated()), id: \.element.id) { index, item in
-                let angle = iconAngle(for: index)
-                SectorView(
-                    item: item,
-                    isSelected: viewModel.selectedIndex == index,
-                    index: index,
-                    count: viewModel.sectors.count,
-                    innerRadius: innerRadius,
-                    outerRadius: outerRadius,
-                    angle: angle,
-                    radius: iconRingRadius
-                )
-                .opacity(isAppearing ? 1 : 0)
-                .scaleEffect(isAppearing ? 1 : 0.4)
-                .rotationEffect(isAppearing ? .zero : .degrees(20))
-                .animation(.spring(response: 0.4, dampingFraction: 0.6).delay(Double(index) * 0.02), value: isAppearing)
-            }
         }
-        .frame(width: windowSize, height: windowSize)
-        .scaleEffect(isAppearing ? 1 : 0.85)
-        .opacity(isAppearing ? 1 : 0)
-        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isAppearing)
-        .onAppear { isAppearing = true }
     }
+
+    // MARK: - Sector icons
+
+    private var sectorIcons: some View {
+        ForEach(Array(viewModel.sectors.enumerated()), id: \.element.id) { index, item in
+            let angle = iconAngle(for: index)
+            SectorView(
+                item: item,
+                isSelected: viewModel.selectedIndex == index,
+                index: index,
+                count: viewModel.sectors.count,
+                innerRadius: innerRadius,
+                outerRadius: outerRadius,
+                angle: angle,
+                radius: iconRingRadius
+            )
+            .opacity(isAppearing ? 1 : 0)
+            .scaleEffect(isAppearing ? 1 : 0.4)
+            .rotationEffect(isAppearing ? .zero : .degrees(20))
+            .animation(.spring(response: 0.4, dampingFraction: 0.6).delay(Double(index) * 0.02), value: isAppearing)
+        }
+    }
+
+    // MARK: - Geometry helpers
 
     private func iconAngle(for index: Int) -> Angle {
         let count = viewModel.sectors.count
