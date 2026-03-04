@@ -1,0 +1,5 @@
+.build/
+ring.app/
+.DS_Store
+*.o
+*.d
