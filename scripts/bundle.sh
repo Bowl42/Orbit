@@ -18,6 +18,13 @@ if [ ! -f "$BINARY" ]; then
     exit 1
 fi
 
+# Kill running instance before replacing
+if pgrep -x "$APP_NAME" > /dev/null 2>&1; then
+    echo "Stopping running ${APP_NAME}..."
+    killall "$APP_NAME" 2>/dev/null || true
+    sleep 1
+fi
+
 # Remove old bundle if exists
 if [ -d "$APP_DIR" ]; then
     echo "Removing old ${APP_DIR}..."
@@ -47,3 +54,7 @@ codesign --force --sign "Apple Development" "$APP_DIR"
 
 echo ""
 echo "✓ ${APP_DIR} created successfully"
+
+# Launch the new version
+echo "Launching ${APP_NAME}..."
+open "$APP_DIR"

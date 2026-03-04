@@ -13,17 +13,16 @@ struct RadialMenuView: View {
 
     var body: some View {
         ZStack {
-            // Main Glass Background
+            // Layer 1: Frosted glass background — ultraThinMaterial for large-area translucency
             Circle()
                 .fill(.ultraThinMaterial)
-                .environment(\.colorScheme, .dark)
                 .frame(width: outerRadius * 2, height: outerRadius * 2)
-                .shadow(color: .black.opacity(0.4), radius: 30, x: 0, y: 15)
                 .overlay(
                     Circle().stroke(.white.opacity(0.15), lineWidth: 0.5)
                 )
+                .shadow(color: .black.opacity(0.4), radius: 20, x: 0, y: 10)
 
-            // Sector highlight wedges
+            // Layer 2: Sector highlight wedges
             ForEach(Array(viewModel.sectors.enumerated()), id: \.element.id) { index, _ in
                 SectorWedge(
                     index: index,
@@ -32,45 +31,30 @@ struct RadialMenuView: View {
                     outerRadius: outerRadius
                 )
                 .fill(
-                    RadialGradient(
-                        gradient: Gradient(colors: [
-                            .white.opacity(viewModel.selectedIndex == index ? 0.2 : 0.0),
-                            .white.opacity(viewModel.selectedIndex == index ? 0.05 : 0.0)
-                        ]),
-                        center: .center,
-                        startRadius: innerRadius,
-                        endRadius: outerRadius
-                    )
+                    viewModel.selectedIndex == index
+                        ? Color.accentColor.opacity(0.25)
+                        : Color.clear
                 )
-                .animation(.easeOut(duration: 0.2), value: viewModel.selectedIndex)
+                .animation(.easeOut(duration: 0.15), value: viewModel.selectedIndex)
             }
 
-            // Sector divider lines
+            // Layer 3: Sector divider lines
             if viewModel.sectors.count > 1 {
                 ForEach(0..<viewModel.sectors.count, id: \.self) { index in
                     let startAngle = sectorStartAngle(for: index)
                     SectorDivider(angle: startAngle, innerRadius: innerRadius, outerRadius: outerRadius)
-                        .stroke(
-                            LinearGradient(
-                                gradient: Gradient(colors: [.clear, .white.opacity(0.15), .clear]),
-                                startPoint: .center,
-                                endPoint: UnitPoint(x: cos(startAngle.radians)*0.5 + 0.5, y: sin(startAngle.radians)*0.5 + 0.5)
-                            ),
-                            lineWidth: 0.5
-                        )
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
                 }
             }
 
-            // Center label area
+            // Layer 4: Center circle — uses material (not glass) to avoid glass-on-glass
             ZStack {
                 Circle()
                     .fill(.ultraThinMaterial)
-                    .environment(\.colorScheme, .dark)
                     .frame(width: centerRadius * 2, height: centerRadius * 2)
                     .overlay(
-                        Circle().stroke(.white.opacity(0.2), lineWidth: 0.5)
+                        Circle().stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
                     )
-                    .shadow(color: .black.opacity(0.4), radius: 10, x: 0, y: 4)
 
                 VStack(spacing: 4) {
                     if let index = viewModel.selectedIndex, index < viewModel.sectors.count {
@@ -85,7 +69,6 @@ struct RadialMenuView: View {
                         }
                         Text(viewModel.sectors[index].name)
                             .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white)
                             .multilineTextAlignment(.center)
                             .lineLimit(2)
                             .padding(.horizontal, 6)
@@ -94,14 +77,14 @@ struct RadialMenuView: View {
                     } else {
                         Image(systemName: "circle.grid.cross")
                             .font(.system(size: 24, weight: .light))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.secondary)
                             .transition(.opacity)
                     }
                 }
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.selectedIndex)
 
-            // Sector icons in a ring
+            // Layer 5: Sector icons
             ForEach(Array(viewModel.sectors.enumerated()), id: \.element.id) { index, item in
                 let angle = iconAngle(for: index)
                 SectorView(
@@ -127,7 +110,6 @@ struct RadialMenuView: View {
         .onAppear { isAppearing = true }
     }
 
-    /// Angle for positioning icons — center of each sector, from top clockwise.
     private func iconAngle(for index: Int) -> Angle {
         let count = viewModel.sectors.count
         guard count > 0 else { return .zero }
@@ -135,11 +117,9 @@ struct RadialMenuView: View {
         return .degrees(90 - step * Double(index))
     }
 
-    /// Start angle of a sector edge (for divider lines).
     private func sectorStartAngle(for index: Int) -> Angle {
         let count = viewModel.sectors.count
         let step = 360.0 / Double(count)
-        // Offset by half a sector so dividers sit between icons
         return .degrees(-90 + step * Double(index) - step / 2)
     }
 }

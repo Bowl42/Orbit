@@ -25,7 +25,24 @@ struct KeyCombo: Equatable, Sendable {
         "s": Int64(kVK_ANSI_S), "t": Int64(kVK_ANSI_T), "u": Int64(kVK_ANSI_U),
         "v": Int64(kVK_ANSI_V), "w": Int64(kVK_ANSI_W), "x": Int64(kVK_ANSI_X),
         "y": Int64(kVK_ANSI_Y), "z": Int64(kVK_ANSI_Z),
+        "0": Int64(kVK_ANSI_0), "1": Int64(kVK_ANSI_1), "2": Int64(kVK_ANSI_2),
+        "3": Int64(kVK_ANSI_3), "4": Int64(kVK_ANSI_4), "5": Int64(kVK_ANSI_5),
+        "6": Int64(kVK_ANSI_6), "7": Int64(kVK_ANSI_7), "8": Int64(kVK_ANSI_8),
+        "9": Int64(kVK_ANSI_9),
+        "f1": Int64(kVK_F1), "f2": Int64(kVK_F2), "f3": Int64(kVK_F3),
+        "f4": Int64(kVK_F4), "f5": Int64(kVK_F5), "f6": Int64(kVK_F6),
+        "f7": Int64(kVK_F7), "f8": Int64(kVK_F8), "f9": Int64(kVK_F9),
+        "f10": Int64(kVK_F10), "f11": Int64(kVK_F11), "f12": Int64(kVK_F12),
     ]
+
+    /// Reverse lookup: keyCode → key name
+    static let keyNames: [Int64: String] = {
+        var map: [Int64: String] = [:]
+        for (name, code) in keyCodes {
+            map[code] = name
+        }
+        return map
+    }()
 
     static let modifierMap: [String: CGEventFlags] = [
         "command": .maskCommand,

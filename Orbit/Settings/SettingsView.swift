@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import SwiftUI
 
 struct SettingsView: View {
@@ -7,13 +8,9 @@ struct SettingsView: View {
     @State private var accessibilityGranted = HotkeyManager.hasPermission()
     @State private var inputMonitoringGranted = CGPreflightListenEventAccess()
 
-    @State private var triggerType: TriggerType = .keyboard
-    @State private var selectedKey: String = "space"
-    @State private var selectedMouseButton: String = "mouse4"
-    @State private var useCommand = false
-    @State private var useShift = false
-    @State private var useOption = false
-    @State private var useControl = false
+    @State private var hotkeyKey: String = "mouse4"
+    @State private var hotkeyType: String = "mouse"
+    @State private var hotkeyModifiers: [String] = []
 
     @State private var sectorConfigs: [OrbitConfig.SectorConfig] = (0..<8).map { .recent(index: $0) }
     @State private var selectedSectorIndex: Int = 0
@@ -27,21 +24,9 @@ struct SettingsView: View {
         accessibilityGranted && inputMonitoringGranted
     }
 
-    enum TriggerType: String, CaseIterable {
-        case keyboard = "Keyboard Hotkey"
-        case mouse = "Mouse Button"
+    private var hotkeyDisplayText: String {
+        KeyCombo(key: hotkeyKey, modifiers: hotkeyModifiers).displayName
     }
-
-    static let availableKeys: [(label: String, value: String)] = [
-        ("Space", "space"), ("Return", "return"), ("Tab", "tab"), ("Escape", "escape"),
-    ] + (UnicodeScalar("a").value...UnicodeScalar("z").value).map {
-        let ch = String(UnicodeScalar($0)!)
-        return (ch.uppercased(), ch)
-    }
-
-    static let mouseButtons: [(label: String, value: String)] = [
-        ("Middle Button", "mouse3"), ("Side Button 1 (Back)", "mouse4"), ("Side Button 2 (Forward)", "mouse5"),
-    ]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,14 +35,10 @@ struct SettingsView: View {
                     accessibilityGranted: accessibilityGranted,
                     inputMonitoringGranted: inputMonitoringGranted,
                     allPermissionsGranted: allPermissionsGranted,
-                    triggerType: $triggerType,
-                    selectedKey: $selectedKey,
-                    selectedMouseButton: $selectedMouseButton,
-                    useControl: $useControl,
-                    useOption: $useOption,
-                    useShift: $useShift,
-                    useCommand: $useCommand,
-                    previewText: previewText,
+                    hotkeyKey: $hotkeyKey,
+                    hotkeyType: $hotkeyType,
+                    hotkeyModifiers: $hotkeyModifiers,
+                    hotkeyDisplayText: hotkeyDisplayText,
                     openPrivacySettings: openPrivacySettings
                 )
                 .tabItem { Label("General", systemImage: "gearshape") }
@@ -80,16 +61,17 @@ struct SettingsView: View {
                 Button("Save and Restart") {
                     save()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
+                .tint(.accentColor)
                 .controlSize(.regular)
                 .keyboardShortcut("s", modifiers: .command)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(.bar)
             .overlay(Rectangle().frame(height: 1).foregroundStyle(.separator), alignment: .top)
         }
         .frame(width: 560, height: 540)
+        .background(.regularMaterial)
         .sheet(isPresented: $showingAppPicker) {
             AppPickerView(apps: installedApps) { app in
                 sectorConfigs[selectedSectorIndex] = .pinned(
@@ -136,34 +118,12 @@ struct SettingsView: View {
         }
     }
 
-    private var previewText: String {
-        var parts: [String] = []
-        if useControl { parts.append("⌃") }
-        if useOption { parts.append("⌥") }
-        if useShift { parts.append("⇧") }
-        if useCommand { parts.append("⌘") }
-
-        let triggerLabel: String
-        if triggerType == .keyboard {
-            triggerLabel = Self.availableKeys.first { $0.value == selectedKey }?.label ?? selectedKey.capitalized
-        } else {
-            triggerLabel = Self.mouseButtons.first { $0.value == selectedMouseButton }?.label ?? selectedMouseButton
-        }
-        parts.append(triggerLabel)
-
-        return parts.joined(separator: " + ")
-    }
-
     private func loadFromConfig() {
         let config = configManager.config
         let hotkey = config.hotkey
-        triggerType = hotkey.isMouseTrigger ? .mouse : .keyboard
-        selectedMouseButton = hotkey.key
-        selectedKey = hotkey.key
-        useCommand = hotkey.modifiers.contains("command")
-        useShift = hotkey.modifiers.contains("shift")
-        useOption = hotkey.modifiers.contains("option")
-        useControl = hotkey.modifiers.contains("control")
+        hotkeyKey = hotkey.key
+        hotkeyType = hotkey.isMouseTrigger ? "mouse" : "keyboard"
+        hotkeyModifiers = hotkey.modifiers
 
         // Pad or trim sectors to match sectorCount
         let count = config.sectorCount
@@ -175,16 +135,7 @@ struct SettingsView: View {
     }
 
     private func save() {
-        let key = triggerType == .keyboard ? selectedKey : selectedMouseButton
-        let type = triggerType == .keyboard ? "keyboard" : "mouse"
-
-        var modifiers: [String] = []
-        if useControl { modifiers.append("control") }
-        if useOption { modifiers.append("option") }
-        if useShift { modifiers.append("shift") }
-        if useCommand { modifiers.append("command") }
-
-        configManager.config.hotkey = OrbitConfig.HotkeyConfig(type: type, key: key, modifiers: modifiers)
+        configManager.config.hotkey = OrbitConfig.HotkeyConfig(type: hotkeyType, key: hotkeyKey, modifiers: hotkeyModifiers)
 
         // Re-number recent indices sequentially; pass through all other types
         var recentIdx = 0
@@ -207,14 +158,10 @@ private struct GeneralTab: View {
     let accessibilityGranted: Bool
     let inputMonitoringGranted: Bool
     let allPermissionsGranted: Bool
-    @Binding var triggerType: SettingsView.TriggerType
-    @Binding var selectedKey: String
-    @Binding var selectedMouseButton: String
-    @Binding var useControl: Bool
-    @Binding var useOption: Bool
-    @Binding var useShift: Bool
-    @Binding var useCommand: Bool
-    let previewText: String
+    @Binding var hotkeyKey: String
+    @Binding var hotkeyType: String
+    @Binding var hotkeyModifiers: [String]
+    let hotkeyDisplayText: String
     let openPrivacySettings: (String) -> Void
 
     var body: some View {
@@ -250,49 +197,19 @@ private struct GeneralTab: View {
                 }
             }
 
-            Section("Activation Hotkey") {
-                Picker("Trigger Type", selection: $triggerType.animation()) {
-                    ForEach(SettingsView.TriggerType.allCases, id: \.self) { type in
-                        Text(type.rawValue).tag(type)
-                    }
-                }
-                .pickerStyle(.segmented)
-
-                if triggerType == .keyboard {
-                    Picker("Key", selection: $selectedKey) {
-                        ForEach(SettingsView.availableKeys, id: \.value) { key in
-                            Text(key.label).tag(key.value)
-                        }
-                    }
-                } else {
-                    Picker("Mouse Button", selection: $selectedMouseButton) {
-                        ForEach(SettingsView.mouseButtons, id: \.value) { btn in
-                            Text(btn.label).tag(btn.value)
-                        }
-                    }
-                }
-
-                LabeledContent {
-                    HStack(spacing: 4) {
-                        ModifierToggle("⌃", isOn: $useControl)
-                        ModifierToggle("⌥", isOn: $useOption)
-                        ModifierToggle("⇧", isOn: $useShift)
-                        ModifierToggle("⌘", isOn: $useCommand)
-                    }
-                } label: {
-                    Text("Modifiers")
-                }
-
-                // Inline hotkey preview
-                LabeledContent {
-                    Text(previewText)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Color(nsColor: .secondarySystemFill), in: RoundedRectangle(cornerRadius: 5))
-                } label: {
-                    Text("Preview")
-                }
+            Section {
+                HotkeyRecorderRow(
+                    key: $hotkeyKey,
+                    type: $hotkeyType,
+                    modifiers: $hotkeyModifiers,
+                    displayText: hotkeyDisplayText
+                )
+            } header: {
+                Text("Activation Hotkey")
+            } footer: {
+                Text("Click \"Record\" and press any key or mouse button combination.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -300,23 +217,133 @@ private struct GeneralTab: View {
     }
 }
 
-// MARK: - Modifier Toggle
+// MARK: - Hotkey Recorder
 
-private struct ModifierToggle: View {
-    let label: String
-    @Binding var isOn: Bool
+private struct HotkeyRecorderRow: View {
+    @Binding var key: String
+    @Binding var type: String
+    @Binding var modifiers: [String]
+    let displayText: String
 
-    init(_ label: String, isOn: Binding<Bool>) {
-        self.label = label
-        self._isOn = isOn
-    }
+    @State private var isRecording = false
 
     var body: some View {
-        Toggle(label, isOn: $isOn)
-            .toggleStyle(.button)
-            .controlSize(.regular)
-            .font(.system(.body, design: .monospaced))
-            .frame(width: 34)
+        LabeledContent {
+            HStack(spacing: 8) {
+                Text(isRecording ? "Press a key..." : displayText)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(isRecording ? .secondary : .primary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frame(minWidth: 120)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(isRecording ? Color.accentColor.opacity(0.1) : Color(nsColor: .secondarySystemFill))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(isRecording ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                    )
+
+                if isRecording {
+                    Button("Cancel") {
+                        isRecording = false
+                    }
+                    .controlSize(.small)
+                } else {
+                    Button("Record") {
+                        isRecording = true
+                    }
+                    .controlSize(.small)
+                }
+            }
+        } label: {
+            Text("Hotkey")
+        }
+        .background {
+            if isRecording {
+                HotkeyRecorderHelper(
+                    onKeyRecorded: { newKey, newModifiers in
+                        key = newKey
+                        type = newKey.hasPrefix("mouse") ? "mouse" : "keyboard"
+                        modifiers = newModifiers
+                        isRecording = false
+                    },
+                    onCancel: {
+                        isRecording = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+// MARK: - NSView-based Hotkey Recorder Helper
+
+private struct HotkeyRecorderHelper: NSViewRepresentable {
+    let onKeyRecorded: (String, [String]) -> Void
+    let onCancel: () -> Void
+
+    func makeNSView(context: Context) -> HotkeyRecorderNSView {
+        let view = HotkeyRecorderNSView()
+        view.onKeyRecorded = onKeyRecorded
+        view.onCancel = onCancel
+        DispatchQueue.main.async {
+            view.window?.makeFirstResponder(view)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: HotkeyRecorderNSView, context: Context) {
+        nsView.onKeyRecorded = onKeyRecorded
+        nsView.onCancel = onCancel
+    }
+}
+
+private final class HotkeyRecorderNSView: NSView {
+    var onKeyRecorded: ((String, [String]) -> Void)?
+    var onCancel: (() -> Void)?
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func keyDown(with event: NSEvent) {
+        // Escape cancels recording
+        if event.keyCode == UInt16(kVK_Escape) {
+            onCancel?()
+            return
+        }
+
+        let keyName = Self.keyName(for: Int64(event.keyCode))
+        guard let keyName else { return }
+
+        let mods = Self.modifierNames(from: event.modifierFlags)
+        onKeyRecorded?(keyName, mods)
+    }
+
+    override func otherMouseDown(with event: NSEvent) {
+        let buttonNumber = event.buttonNumber
+        let mouseName: String
+        switch buttonNumber {
+        case 2: mouseName = "mouse3"
+        case 3: mouseName = "mouse4"
+        case 4: mouseName = "mouse5"
+        default: mouseName = "mouse\(buttonNumber + 1)"
+        }
+        let mods = Self.modifierNames(from: event.modifierFlags)
+        onKeyRecorded?(mouseName, mods)
+    }
+
+    private static func keyName(for keyCode: Int64) -> String? {
+        return KeyCombo.keyNames[keyCode]
+    }
+
+    private static func modifierNames(from flags: NSEvent.ModifierFlags) -> [String] {
+        var mods: [String] = []
+        if flags.contains(.control) { mods.append("control") }
+        if flags.contains(.option) { mods.append("option") }
+        if flags.contains(.shift) { mods.append("shift") }
+        if flags.contains(.command) { mods.append("command") }
+        return mods
     }
 }
 
@@ -350,29 +377,20 @@ private struct SectorsTab: View {
                     .padding(.bottom, 16)
             }
             .frame(width: 220)
-            .background(.ultraThinMaterial)
 
             Divider()
 
-            // Right: editor
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    // Header
-                    Text("SECTOR \(selectedSectorIndex + 1)")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
-
-                    SectorEditor(
-                        config: $sectorConfigs[selectedSectorIndex],
-                        index: selectedSectorIndex,
-                        installedApps: installedApps,
-                        onChooseApp: { showingAppPicker = true },
-                        onBrowsePath: { showingPathPicker = true }
-                    )
-                }
-                .padding(16)
+            // Right: editor using standard Form
+            Form {
+                SectorEditor(
+                    config: $sectorConfigs[selectedSectorIndex],
+                    index: selectedSectorIndex,
+                    installedApps: installedApps,
+                    onChooseApp: { showingAppPicker = true },
+                    onBrowsePath: { showingPathPicker = true }
+                )
             }
+            .formStyle(.grouped)
         }
     }
 }
@@ -390,6 +408,7 @@ private struct SectorRingPreview: View {
     var body: some View {
         HStack {
             Spacer()
+            GlassEffectContainer {
             ZStack {
                 // Subtle connecting ring
                 Circle()
@@ -409,17 +428,11 @@ private struct SectorRingPreview: View {
                     } label: {
                         sectorIcon(for: configs[i])
                             .frame(width: dotSize, height: dotSize)
-                            .background(.regularMaterial)
-                            .clipShape(Circle())
-                            .overlay(
-                                Circle()
-                                    .strokeBorder(
-                                        isSelected ? Color.accentColor : Color.secondary.opacity(0.15),
-                                        lineWidth: isSelected ? 1.5 : 0.5
-                                    )
+                            .glassEffect(
+                                isSelected ? .regular.tint(.accentColor).interactive() : .regular,
+                                in: .circle
                             )
                             .scaleEffect(isSelected ? 1.08 : 1.0)
-                            .shadow(color: isSelected ? Color.accentColor.opacity(0.3) : .clear, radius: 4)
                     }
                     .buttonStyle(.plain)
                     .offset(x: x, y: y)
@@ -437,6 +450,7 @@ private struct SectorRingPreview: View {
                 }
             }
             .frame(width: ringRadius * 2 + dotSize + 8, height: ringRadius * 2 + dotSize + 8)
+            } // GlassEffectContainer
             Spacer()
         }
     }
@@ -512,58 +526,6 @@ private enum SectorKind: String, CaseIterable {
     }
 }
 
-// MARK: - Editor Helper Views
-
-private struct FieldLabel: View {
-    let text: String
-    var body: some View {
-        Text(text)
-            .font(.system(size: 9, weight: .bold, design: .rounded))
-            .foregroundStyle(.secondary)
-            .textCase(.uppercase)
-    }
-}
-
-private struct FieldBox: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .textFieldStyle(.plain)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.secondary.opacity(0.15), lineWidth: 0.5)
-            )
-    }
-}
-
-private struct CardBox: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .padding(14)
-            .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.secondary.opacity(0.15), lineWidth: 0.5)
-            )
-    }
-}
-
-private struct HintLabel: View {
-    let text: String
-    var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "info.circle")
-            Text(text)
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-    }
-}
-
 // MARK: - Sector Editor
 
 private struct SectorEditor: View {
@@ -593,206 +555,132 @@ private struct SectorEditor: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // Type selector card
-            VStack(alignment: .leading, spacing: 6) {
-                FieldLabel(text: "Action Type")
-                Picker("Type", selection: sectorKind) {
-                    ForEach(SectorKind.allCases, id: \.self) { kind in
-                        Text(kind.rawValue).tag(kind)
-                    }
+        Section("Sector \(index + 1)") {
+            Picker("Action Type", selection: sectorKind) {
+                ForEach(SectorKind.allCases, id: \.self) { kind in
+                    Text(kind.rawValue).tag(kind)
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .modifier(FieldBox())
             }
-            .modifier(CardBox())
-
-            // Per-type fields
-            sectorFields
         }
+
+        sectorFields
     }
 
     @ViewBuilder
     private var sectorFields: some View {
         switch config {
         case .recent:
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.title3)
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20)
-                    .padding(.top, 2)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Automatic")
-                        .fontWeight(.semibold)
-                    Text("This sector shows the last application you used. No configuration needed.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+            Section {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Automatic")
+                            .fontWeight(.medium)
+                        Text("Shows the most recently used application. No configuration needed.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .modifier(CardBox())
 
-        case .pinned(let bundleId, let name, _):
-            VStack(alignment: .leading, spacing: 6) {
-                FieldLabel(text: "Application")
-                Button(action: onChooseApp) {
-                    HStack(spacing: 10) {
-                        if let app = installedApps.first(where: { $0.bundleId == bundleId }) {
-                            Image(nsImage: app.icon)
-                                .resizable()
-                                .frame(width: 28, height: 28)
+        case .pinned(let bundleId, _, _):
+            Section("Application") {
+                if let app = installedApps.first(where: { $0.bundleId == bundleId }) {
+                    LabeledContent {
+                        Button("Change...", action: onChooseApp)
+                    } label: {
+                        Label {
                             VStack(alignment: .leading, spacing: 1) {
-                                Text(app.name)
-                                    .fontWeight(.medium)
-                                    .lineLimit(1)
+                                Text(app.name).lineLimit(1)
                                 Text(app.bundleId)
                                     .font(.caption)
                                     .foregroundStyle(.tertiary)
                                     .lineLimit(1)
                             }
-                            Spacer()
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        } else if !name.isEmpty {
-                            Image(systemName: "app.dashed")
-                                .font(.title3)
-                                .foregroundStyle(.secondary)
-                                .frame(width: 28, height: 28)
-                            Text(name).lineLimit(1)
-                            Spacer()
-                            Image(systemName: "chevron.up.chevron.down")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        } else {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.title3)
-                                .foregroundStyle(.tint)
-                                .frame(width: 28, height: 28)
-                            Text("Choose Application...")
-                                .foregroundStyle(.tint)
-                            Spacer()
+                        } icon: {
+                            Image(nsImage: app.icon)
+                                .resizable()
+                                .frame(width: 24, height: 24)
                         }
                     }
-                    .modifier(FieldBox())
+                } else {
+                    Button("Choose Application...", action: onChooseApp)
                 }
-                .buttonStyle(.plain)
             }
-            .modifier(CardBox())
 
         case .url(let name, let url, _):
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    FieldLabel(text: "Display Name")
-                    TextField("e.g. GitHub", text: urlNameBinding(name: name, url: url))
-                        .modifier(FieldBox())
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    FieldLabel(text: "URL")
-                    TextField("https://example.com", text: urlValueBinding(name: name, url: url))
-                        .modifier(FieldBox())
-                        .textContentType(.URL)
-                }
+            Section {
+                TextField("Display Name", text: urlNameBinding(name: name, url: url), prompt: Text("e.g. GitHub"))
+                TextField("URL", text: urlValueBinding(name: name, url: url), prompt: Text("https://example.com"))
+                    .textContentType(.URL)
+            } header: {
+                Text("URL")
+            } footer: {
                 if !url.isEmpty, URL(string: url) == nil {
-                    HStack(spacing: 5) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                        Text("Invalid URL format.")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+                    Label("Invalid URL format.", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
                 } else {
-                    HintLabel(text: "Opens in your default browser.")
+                    Text("Opens in your default browser.")
                 }
             }
-            .modifier(CardBox())
 
         case .shellCommand(let name, let command, _):
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    FieldLabel(text: "Display Name")
-                    TextField("e.g. Build Project", text: shellNameBinding(name: name, command: command))
-                        .modifier(FieldBox())
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    FieldLabel(text: "Command")
-                    TextField("e.g. make build && say done", text: shellCommandBinding(name: name, command: command))
-                        .font(.system(.body, design: .monospaced))
-                        .modifier(FieldBox())
-                }
-                HintLabel(text: "Runs via /bin/zsh. Output is silenced.")
+            Section {
+                TextField("Display Name", text: shellNameBinding(name: name, command: command), prompt: Text("e.g. Build Project"))
+                TextField("Command", text: shellCommandBinding(name: name, command: command), prompt: Text("e.g. make build && say done"))
+                    .font(.system(.body, design: .monospaced))
+            } header: {
+                Text("Shell Command")
+            } footer: {
+                Text("Runs via /bin/zsh. Output is silenced.")
             }
-            .modifier(CardBox())
 
         case .systemAction(let action):
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    FieldLabel(text: "System Action")
-                    Picker("Action", selection: systemActionBinding(current: action)) {
-                        ForEach(OrbitConfig.SystemActionKind.allCases, id: \.self) { kind in
-                            Label(kind.displayName, systemImage: kind.sfSymbolName).tag(kind)
-                        }
+            Section {
+                Picker("Action", selection: systemActionBinding(current: action)) {
+                    ForEach(OrbitConfig.SystemActionKind.allCases, id: \.self) { kind in
+                        Label(kind.displayName, systemImage: kind.sfSymbolName).tag(kind)
                     }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .modifier(FieldBox())
                 }
-                HStack(spacing: 6) {
-                    Image(systemName: action.sfSymbolName)
-                        .frame(width: 14)
-                    Text(systemActionDescription(action))
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            } header: {
+                Text("System Action")
+            } footer: {
+                Label(systemActionDescription(action), systemImage: action.sfSymbolName)
             }
-            .modifier(CardBox())
 
         case .shortcut(let name):
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    FieldLabel(text: "Shortcut Name")
-                    TextField("e.g. Toggle Focus Mode", text: shortcutNameBinding(name: name))
-                        .modifier(FieldBox())
-                }
-                HintLabel(text: "Enter the exact name from the Shortcuts app.")
+            Section {
+                TextField("Shortcut Name", text: shortcutNameBinding(name: name), prompt: Text("e.g. Toggle Focus Mode"))
+            } header: {
+                Text("Shortcut")
+            } footer: {
+                Text("Enter the exact name from the Shortcuts app.")
             }
-            .modifier(CardBox())
 
         case .openPath(let name, let path, _):
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    FieldLabel(text: "Display Name")
-                    TextField("e.g. Downloads", text: pathNameBinding(name: name, path: path))
-                        .modifier(FieldBox())
+            Section {
+                TextField("Display Name", text: pathNameBinding(name: name, path: path), prompt: Text("e.g. Downloads"))
+                HStack {
+                    TextField("Path", text: pathValueBinding(name: name, path: path), prompt: Text("~/Documents"))
+                        .font(.system(.body, design: .monospaced))
+                    Button("Browse...", action: onBrowsePath)
                 }
-                VStack(alignment: .leading, spacing: 6) {
-                    FieldLabel(text: "Path")
-                    HStack(spacing: 6) {
-                        TextField("~/Documents", text: pathValueBinding(name: name, path: path))
-                            .font(.system(.body, design: .monospaced))
-                            .modifier(FieldBox())
-                        Button("Browse...", action: onBrowsePath)
-                            .controlSize(.small)
-                    }
-                }
+            } header: {
+                Text("File or Folder")
+            } footer: {
                 if !path.isEmpty {
                     let expanded = NSString(string: path).expandingTildeInPath
                     let exists = FileManager.default.fileExists(atPath: expanded)
-                    HStack(spacing: 5) {
-                        Image(systemName: exists ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                        Text(exists ? "Path exists." : "Path not found.")
-                    }
-                    .font(.caption)
+                    Label(
+                        exists ? "Path exists." : "Path not found.",
+                        systemImage: exists ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+                    )
                     .foregroundStyle(exists ? .green : .orange)
                 } else {
-                    HintLabel(text: "Opens in Finder. Supports ~ for home directory.")
+                    Text("Opens in Finder. Supports ~ for home directory.")
                 }
             }
-            .modifier(CardBox())
         }
     }
 

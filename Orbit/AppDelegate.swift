@@ -46,11 +46,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         let contentSize = hostingView.intrinsicContentSize
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: contentSize),
-            styleMask: [.titled, .closable],
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "Orbit Settings"
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
         window.contentView = hostingView
         window.center()
         window.makeKeyAndOrderFront(nil)

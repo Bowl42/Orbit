@@ -8,7 +8,6 @@ struct OrbitApp: App {
         MenuBarExtra {
             MenuBarPopoverView(appDelegate: appDelegate)
         } label: {
-            // The icon in the menu bar.
             Image(systemName: "circle.grid.cross")
                 .font(.system(size: 14))
         }
@@ -33,93 +32,76 @@ private struct MenuBarPopoverView: View {
     private var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "N/A"
     }
-    
+
     private var hotkeyDescription: String {
         guard let config = controller?.configManager.config else { return "Not configured" }
         return KeyCombo(from: config.hotkey).displayName
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 10) {
             // Header
-            VStack(spacing: 12) {
-                HStack {
-                    Image(systemName: "circle.grid.cross.fill")
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.accentColor)
-                    
+            HStack(spacing: 10) {
+                Image(systemName: "circle.grid.cross.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.accentColor)
+
+                VStack(alignment: .leading, spacing: 2) {
                     Text("Orbit")
-                        .font(.largeTitle.weight(.heavy))
-                    
-                    Spacer()
-                }
-
-                HStack {
-                    Circle()
-                        .fill(isRunning ? Color.green : Color.red)
-                        .frame(width: 8, height: 8)
-                        .shadow(color: (isRunning ? Color.green : Color.red).opacity(0.5), radius: 3, x: 0, y: 0)
-                    
-                    Text(isRunning ? "Active" : "Inactive")
-                        .font(.body.weight(.bold))
-                        .foregroundStyle(.secondary)
-                    
-                    Spacer()
-                    
-                    Text(hotkeyDescription)
-                        .font(.system(.body, design: .monospaced).weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.quaternary.opacity(0.5))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 16)
-            
-            Divider()
-            
-            // Action Buttons
-            VStack(spacing: 0) {
-                Button {
-                    let delegate = appDelegate
-                    dismiss()
-                    DispatchQueue.main.async {
-                        delegate.showSettings()
+                        .font(.headline)
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(isRunning ? Color.green : Color.red)
+                            .frame(width: 6, height: 6)
+                        Text(isRunning ? "Active" : "Inactive")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                } label: {
-                    Label("Settings...", systemImage: "gearshape.fill")
-                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .buttonStyle(.borderless)
-                .padding(12)
 
-                Divider()
-                
-                Button {
-                    NSApp.terminate(nil)
-                } label: {
-                    Label("Quit Orbit", systemImage: "power.circle.fill")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.borderless)
-                .padding(12)
-            }
-            
-            Divider()
-            
-            // Footer
-            HStack {
-                Text("Version \(version)")
-                    .font(.caption)
-                    .foregroundColor(.secondary.opacity(0.7))
                 Spacer()
+
+                Text(hotkeyDescription)
+                    .font(.system(.caption, design: .monospaced).weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(.quaternary.opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(.quaternary.opacity(0.3))
+            .padding(.bottom, 4)
+
+            Divider()
+
+            // Glass-style action buttons
+            Button {
+                let delegate = appDelegate
+                dismiss()
+                DispatchQueue.main.async {
+                    delegate.showSettings()
+                }
+            } label: {
+                Label("Settings...", systemImage: "gearshape")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glass)
+
+            Button {
+                NSApp.terminate(nil)
+            } label: {
+                Label("Quit Orbit", systemImage: "power")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glass)
+            .tint(.pink)
+
+            // Footer
+            Text("Version \(version)")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(width: 280)
+        .padding()
+        .frame(width: 240)
     }
 }
