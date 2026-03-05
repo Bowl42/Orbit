@@ -43,15 +43,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, Obse
             onSave: { [weak self] in
                 guard let self, let controller = self.controller else { return }
                 controller.applyHotkey()
-                if HotkeyManager.hasPermission() && !controller.hotkeyManager.isListening {
-                    controller.startListening()
+                if controller.configManager.config.isActive && HotkeyManager.hasPermission() {
+                    if !controller.hotkeyManager.isListening {
+                        controller.startListening()
+                    }
+                } else {
+                    controller.stopListening()
                 }
             }
         )
 
         let hostingView = NSHostingView(rootView: settingsView)
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 640, height: 560),
+            contentRect: NSRect(x: 0, y: 0, width: 920, height: 720),
             styleMask: [.titled, .closable, .fullSizeContentView, .resizable],
             backing: .buffered,
             defer: false

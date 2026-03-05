@@ -6,7 +6,7 @@ import Observation
 
 private enum Spatial {
     static let windowWidth: CGFloat = 920
-    static let windowHeight: CGFloat = 640
+    static let windowHeight: CGFloat = 720
     
     static let glassRadius: CGFloat = 38
     static let cardRadius: CGFloat = 28
@@ -30,9 +30,10 @@ final class SettingsViewModel {
     let configManager: ConfigManager
     let onSave: () -> Void
 
+    var isActive = true
     var accessibilityGranted = HotkeyManager.hasPermission()
     var inputMonitoringGranted = CGPreflightListenEventAccess()
-    
+
     var hotkeyKey = ""
     var hotkeyType = ""
     var hotkeyModifiers: [String] = []
@@ -52,6 +53,7 @@ final class SettingsViewModel {
     
     func loadFromConfig() {
         let config = configManager.config
+        isActive = config.isActive
         let hotkey = config.hotkey
         hotkeyKey = hotkey.key
         hotkeyType = hotkey.isMouseTrigger ? "mouse" : "keyboard"
@@ -76,6 +78,7 @@ final class SettingsViewModel {
     }
     
     func save() {
+        configManager.config.isActive = isActive
         configManager.config.hotkey = OrbitConfig.HotkeyConfig(type: hotkeyType, key: hotkeyKey, modifiers: hotkeyModifiers)
         var recentIdx = 0
         configManager.config.sectors = sectorConfigs.map { sector in
@@ -87,7 +90,6 @@ final class SettingsViewModel {
         }
         configManager.saveConfig()
         onSave()
-        close()
     }
     
     func close() {
@@ -105,8 +107,6 @@ enum SettingsTab: String, CaseIterable {
 
 struct SettingsView: View {
     @State private var viewModel: SettingsViewModel
-    @Namespace private var spatialNamespace
-    @Environment(\.colorScheme) var colorScheme
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     init(configManager: ConfigManager, onSave: @escaping () -> Void) {
@@ -114,39 +114,31 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        ZStack {
-            // Level 0: The Immersive Material (Naturally adaptive)
-            VisualEffectView(material: .fullScreenUI, blendingMode: .behindWindow)
-                .ignoresSafeArea()
-            
-            // Level 1: Dynamic Tint
-            (colorScheme == .dark ? Color.black.opacity(0.2) : Color.white.opacity(0.1))
-                .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Header
-                topNavigation
-                
-                // Content
-                ZStack {
-                    if viewModel.currentTab == .general {
-                        generalTab
-                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                    } else {
-                        sectorsTab
-                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                    }
+        VStack(spacing: 0) {
+            topNavigation
+
+            ZStack {
+                if viewModel.currentTab == .general {
+                    generalTab
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                } else {
+                    sectorsTab
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .animation(.spring(response: 0.4, dampingFraction: 0.85), value: viewModel.currentTab)
-                
-                // Footer
-                footerActions
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: viewModel.currentTab)
+
+            footerActions
         }
         .frame(width: Spatial.windowWidth, height: Spatial.windowHeight)
         .task { await viewModel.fetchApps() }
         .onReceive(timer) { _ in viewModel.refreshPermissions() }
+        .background {
+            Button("") { viewModel.save() }
+                .keyboardShortcut("s", modifiers: .command)
+                .hidden()
+        }
     }
     
     private var topNavigation: some View {
@@ -170,15 +162,9 @@ struct SettingsView: View {
                         Text(tab.rawValue)
                             .font(Spatial.fontHeader)
                             .padding(.horizontal, 20).padding(.vertical, 8)
-                            .background(ZStack {
-                                if viewModel.currentTab == tab {
-                                    Capsule()
-                                        .fill(colorScheme == .dark ? .white : .black)
-                                        .matchedGeometryEffect(id: "tab", in: spatialNamespace)
-                                        .shadow(color: .primary.opacity(0.2), radius: 10, y: 4)
-                                }
-                            })
-                            .foregroundStyle(viewModel.currentTab == tab ? (colorScheme == .dark ? .black : .white) : .primary.opacity(0.5))
+                            .background(Capsule().fill(viewModel.currentTab == tab ? Color.primary : Color.clear))
+                            .foregroundStyle(viewModel.currentTab == tab ? Color(nsColor: .windowBackgroundColor) : .primary.opacity(0.5))
+                            .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
                 }
@@ -203,12 +189,23 @@ struct SettingsView: View {
             SpatialAdaptiveButton(title: "Save Changes", isDefault: true) { viewModel.save() }
         }
         .padding(.horizontal, 48)
+        .padding(.top, 16)
         .padding(.bottom, 48)
     }
     
     private var generalTab: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 32) {
+                SpatialSectionBox(title: "General", icon: "power") {
+                    HStack {
+                        Text("Active").font(Spatial.fontBody).bold().foregroundStyle(.primary)
+                        Spacer()
+                        Toggle("", isOn: $viewModel.isActive)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+                }
+
                 SpatialSectionBox(title: "Security & Access", icon: "shield.fill") {
                     VStack(spacing: 12) {
                         SpatialPermissionLine(title: "Accessibility API", isGranted: viewModel.accessibilityGranted) {
@@ -233,8 +230,9 @@ struct SettingsView: View {
             .padding(.top, 20)
             .frame(maxWidth: 680)
         }
+        .frame(maxHeight: .infinity)
     }
-    
+
     private var sectorsTab: some View {
         HStack(spacing: 0) {
             VStack(spacing: 40) {
@@ -251,9 +249,9 @@ struct SettingsView: View {
                     ActionTypeAdaptiveFlow(selection: sectorKindBinding)
                 }
                 .padding(24)
-                .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(colorScheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
+                .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.primary.opacity(0.04)))
                 .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Spatial.rimStroke, lineWidth: 0.5))
-                
+
                 VStack(alignment: .leading, spacing: 0) {
                     ScrollView(showsIndicators: false) {
                         EditorPaneGridAdaptive(config: $viewModel.sectorConfigs[viewModel.selectedSectorIndex], apps: viewModel.installedApps, isLoading: viewModel.isLoadingApps)
@@ -261,7 +259,7 @@ struct SettingsView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(colorScheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
+                .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Color.primary.opacity(0.04)))
                 .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(Spatial.rimStroke, lineWidth: 0.5))
             }
             .padding(.trailing, 48)
@@ -395,17 +393,11 @@ private struct ActionTypeAdaptiveFlow: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(SectorKind.allCases, id: \.self) { kind in
-                    Button { withAnimation(.spring(response: 0.3)) { selection = kind } } label: {
+                    Button { selection = kind } label: {
                         Text(kind.rawValue).font(Spatial.fontLabel)
                             .padding(.horizontal, 18).padding(.vertical, 10)
-                            .background(ZStack {
-                                if selection == kind {
-                                    Capsule().fill(colorScheme == .dark ? .white : .black)
-                                } else {
-                                    Capsule().fill(Color.primary.opacity(0.08))
-                                }
-                            })
-                            .foregroundStyle(selection == kind ? (colorScheme == .dark ? .black : .white) : .primary.opacity(0.7))
+                            .background(Capsule().fill(selection == kind ? Color.primary : Color.primary.opacity(0.08)))
+                            .foregroundStyle(selection == kind ? Color(nsColor: .windowBackgroundColor) : .primary.opacity(0.7))
                     }.buttonStyle(.plain)
                 }
             }
@@ -519,14 +511,6 @@ private struct SpatialAdaptiveButton: View {
 }
 
 // MARK: - Helpers
-
-private struct VisualEffectView: NSViewRepresentable {
-    let material: NSVisualEffectView.Material; let blendingMode: NSVisualEffectView.BlendingMode
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let v = NSVisualEffectView(); v.material = material; v.blendingMode = blendingMode; v.state = .active; return v
-    }
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
-}
 
 private enum SectorKind: String, CaseIterable {
     case recent = "Recent", pinned = "App", url = "URL", system = "System", shell = "Shell", translate = "Translate"

@@ -1,6 +1,7 @@
 import Foundation
 
 struct OrbitConfig: Codable, Equatable, Sendable {
+    var isActive: Bool
     var hotkey: HotkeyConfig
     var sectorCount: Int
     var sectors: [SectorConfig]
@@ -156,8 +157,29 @@ struct OrbitConfig: Codable, Equatable, Sendable {
     }
 
     static let `default` = OrbitConfig(
+        isActive: true,
         hotkey: HotkeyConfig(type: "mouse", key: "mouse4", modifiers: []),
         sectorCount: 8,
         sectors: (0..<8).map { .recent(index: $0) }
     )
+
+    init(isActive: Bool, hotkey: HotkeyConfig, sectorCount: Int, sectors: [SectorConfig]) {
+        self.isActive = isActive
+        self.hotkey = hotkey
+        self.sectorCount = sectorCount
+        self.sectors = sectors
+    }
+
+    // Custom decoder so old configs without `isActive` default to true
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        isActive = (try? c.decode(Bool.self, forKey: .isActive)) ?? true
+        hotkey = try c.decode(HotkeyConfig.self, forKey: .hotkey)
+        sectorCount = try c.decode(Int.self, forKey: .sectorCount)
+        sectors = try c.decode([SectorConfig].self, forKey: .sectors)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case isActive, hotkey, sectorCount, sectors
+    }
 }
