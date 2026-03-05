@@ -3,8 +3,7 @@ import SwiftUI
 struct RadialMenuView: View {
     let viewModel: RadialMenuViewModel
     @State private var isAppearing = false
-    @Environment(\.colorScheme) var colorScheme
-    
+
     private let size: CGFloat = 340
     private let iconRadius: CGFloat = 112
     private let innerRadius: CGFloat = 58
@@ -12,24 +11,19 @@ struct RadialMenuView: View {
 
     var body: some View {
         ZStack {
-            // 1. Level 1 Tint - Aligning with SettingsView deep glass feel
-            Circle()
-                .fill(colorScheme == .dark ? Color.black.opacity(0.2) : Color.white.opacity(0.1))
-                .frame(width: size, height: size)
-            
-            // 2. Specular High-Light Edge (The Glass Rim)
+            // Level 0: Glass rim highlight (blur handled by Panel's NSVisualEffectView)
             Circle()
                 .stroke(
                     LinearGradient(
-                        colors: [.white.opacity(0.3), .white.opacity(0.05), .clear],
+                        colors: [.white.opacity(0.5), .white.opacity(0.1), .clear],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
-                    lineWidth: 0.5
+                    lineWidth: 1
                 )
-                .frame(width: size, height: size)
+                .frame(width: size - 1, height: size - 1)
 
-            // 3. Selection Highlight Wedge
+            // Level 1: Selection Wedge
             Canvas { context, sz in
                 guard let selectedIndex = viewModel.selectedIndex else { return }
                 let count = viewModel.sectors.count
@@ -45,15 +39,15 @@ struct RadialMenuView: View {
                 path.addArc(center: center, radius: innerRadius, startAngle: endAngle, endAngle: startAngle, clockwise: true)
                 path.closeSubpath()
 
-                context.fill(path, with: .color(Color.white.opacity(0.2)))
+                    context.fill(path, with: .color(Color.white.opacity(0.15)))
                 
                 var rim = Path()
                 rim.addArc(center: center, radius: sz.width / 2 - 1, startAngle: startAngle, endAngle: endAngle, clockwise: false)
-                context.stroke(rim, with: .color(Color.white.opacity(0.5)), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                context.stroke(rim, with: .color(Color.white.opacity(0.6)), style: StrokeStyle(lineWidth: 2, lineCap: .round))
             }
             .animation(.spring(response: 0.15, dampingFraction: 0.8), value: viewModel.selectedIndex)
 
-            // 4. Icons
+            // Level 2: Icons
             ForEach(Array(viewModel.sectors.enumerated()), id: \.element.id) { index, item in
                 SectorView(
                     item: item,
@@ -64,31 +58,34 @@ struct RadialMenuView: View {
                 )
             }
 
-            // 5. Center Hub
-            LiquidGlassView(cornerRadius: innerRadius) {
-                ZStack {
-                    if let item = selectedItem {
-                        VStack(spacing: 4) {
-                            if let icon = item.icon {
-                                Image(nsImage: icon)
-                                    .resizable()
-                                    .frame(width: 30, height: 30)
-                                    .transition(.scale(0.8).combined(with: .opacity))
-                            }
-                            Text(item.name)
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
+            // Level 3: Center Hub
+            ZStack {
+                if let item = selectedItem {
+                    VStack(spacing: 4) {
+                        if let icon = item.icon {
+                            Image(nsImage: icon)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 32, height: 32)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .shadow(color: .white.opacity(0.3), radius: 12)
+                                .transition(.scale(0.8).combined(with: .opacity))
                         }
-                    } else {
-                        Image(systemName: "circle.grid.cross.fill")
-                            .font(.system(size: 24, weight: .light))
-                            .foregroundStyle(.white.opacity(0.4))
+                        Text(item.name)
+                            .font(.system(size: 12, weight: .black, design: .rounded))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.5), radius: 4)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
+                } else {
+                    // Default Floating Logo
+                    Image(systemName: "circle.grid.cross.fill")
+                        .font(.system(size: 28, weight: .light))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .shadow(color: .white.opacity(0.3), radius: 10)
                 }
-                .frame(width: innerRadius * 2, height: innerRadius * 2)
             }
-            .scaleEffect(isAppearing ? 1 : 0.8)
+            .scaleEffect(isAppearing ? 1 : 0.85)
         }
         .frame(width: size, height: size)
         .opacity(isAppearing ? 1 : 0)

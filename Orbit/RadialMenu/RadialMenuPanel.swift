@@ -3,12 +3,14 @@ import SwiftUI
 
 final class RadialMenuPanel: NSPanel {
 
+    private let panelSize: CGFloat = 340
+
     init() {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 340, height: 340),
             styleMask: [.nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
-            defer: true
+            defer: false
         )
 
         isFloatingPanel = true
@@ -27,9 +29,10 @@ final class RadialMenuPanel: NSPanel {
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         isMovableByWindowBackground = false
+
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = false
+        hasShadow = false  // shadow on non-rectangular windows looks bad
 
         standardWindowButton(.closeButton)?.isHidden = true
         standardWindowButton(.miniaturizeButton)?.isHidden = true
@@ -43,27 +46,31 @@ final class RadialMenuPanel: NSPanel {
 
     @MainActor
     func setContent<Content: View>(@ViewBuilder _ content: () -> Content) {
-        // 使用与设置窗口一致的 fullScreenUI 材质
-        let effectView = NSVisualEffectView()
-        effectView.material = .fullScreenUI 
-        effectView.blendingMode = .behindWindow
-        effectView.state = .active
-        effectView.wantsLayer = true
-        effectView.layer?.cornerRadius = 170
-        effectView.layer?.masksToBounds = true
-        
-        let hostingView = NSHostingView(rootView: content().ignoresSafeArea())
-        hostingView.translatesAutoresizingMaskIntoConstraints = false
-        
-        effectView.addSubview(hostingView)
-        self.contentView = effectView
+        let size = panelSize
 
-        NSLayoutConstraint.activate([
-            hostingView.centerXAnchor.constraint(equalTo: effectView.centerXAnchor),
-            hostingView.centerYAnchor.constraint(equalTo: effectView.centerYAnchor),
-            hostingView.widthAnchor.constraint(equalToConstant: 340),
-            hostingView.heightAnchor.constraint(equalToConstant: 340)
-        ])
+        // NSVisualEffectView as the root — circular via cornerRadius
+        let blur = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: size, height: size))
+        blur.material = .hudWindow
+        blur.blendingMode = .behindWindow
+        blur.state = .active
+        blur.wantsLayer = true
+        blur.layer?.cornerRadius = size / 2
+        blur.layer?.masksToBounds = true
+
+        // SwiftUI content on top
+        let hostingView = NSHostingView(
+            rootView: content()
+                .ignoresSafeArea()
+                .frame(width: size, height: size)
+                .background(.clear)
+        )
+        hostingView.frame = blur.bounds
+        hostingView.autoresizingMask = [.width, .height]
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = .clear
+
+        blur.addSubview(hostingView)
+        self.contentView = blur
     }
 
     @MainActor
