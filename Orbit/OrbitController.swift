@@ -10,8 +10,6 @@ final class OrbitController {
     let viewModel: RadialMenuViewModel
 
     private var panel: RadialMenuPanel?
-    private var globalMonitor: Any?
-    private var localMonitor: Any?
 
     init() {
         configManager = ConfigManager()
@@ -39,6 +37,18 @@ final class OrbitController {
         _ = hotkeyManager.start()
     }
 
+    func stopListening() {
+        hotkeyManager.stop()
+    }
+
+    func toggleListening() {
+        if hotkeyManager.isListening {
+            stopListening()
+        } else {
+            startListening()
+        }
+    }
+
     private func showMenu() {
         // Build sectors first
         viewModel.buildSectors(
@@ -53,61 +63,28 @@ final class OrbitController {
             RadialMenuView(viewModel: self.viewModel)
         }
         
-        // 1. Capture exact center point in screen coordinates
+        // Capture exact center point in screen coordinates
         let actualCenter = panel.showAtMouseLocation()
         viewModel.centerPoint = actualCenter
         self.panel = panel
-
-        // 2. Clear old monitors if they exist
-        clearMonitors()
-
-        // 3. Add new monitors - capture self weakly but run safely on MainActor
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor in
-                self.viewModel.updateSelection(mouseLocation: NSEvent.mouseLocation)
-            }
-        }
-        
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] event in
-            guard let self else { return event }
-            Task { @MainActor in
-                self.viewModel.updateSelection(mouseLocation: NSEvent.mouseLocation)
-            }
-            return event
-        }
     }
 
     private func hideMenuAndExecute() {
         let selectedIndex = viewModel.selectedIndex
         let sectors = viewModel.sectors
 
-        // 1. Clear monitors immediately
-        clearMonitors()
-
-        // 2. Dismiss panel
+        // 1. Dismiss panel
         panel?.dismiss()
         panel = nil
 
-        // 3. Execute action asynchronously
+        // 2. Execute action
         if let index = selectedIndex, index < sectors.count, let action = sectors[index].action {
             Task {
                 await action.execute()
             }
         }
         
-        // 4. Reset VM state
+        // 3. Reset VM state
         viewModel.selectedIndex = nil
-    }
-
-    private func clearMonitors() {
-        if let gm = globalMonitor {
-            NSEvent.removeMonitor(gm)
-            globalMonitor = nil
-        }
-        if let lm = localMonitor {
-            NSEvent.removeMonitor(lm)
-            localMonitor = nil
-        }
     }
 }

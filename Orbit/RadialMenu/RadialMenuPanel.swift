@@ -16,6 +16,7 @@ final class RadialMenuPanel: NSPanel {
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
         worksWhenModal = true
+        acceptsMouseMovedEvents = true // CRITICAL: Allow mouse moved events
 
         collectionBehavior = [
             .fullScreenAuxiliary,
@@ -43,11 +44,11 @@ final class RadialMenuPanel: NSPanel {
     @MainActor
     func setContent<Content: View>(@ViewBuilder _ content: () -> Content) {
         let effectView = NSVisualEffectView()
-        effectView.material = .hudWindow
+        effectView.material = .hudWindow 
         effectView.blendingMode = .behindWindow
         effectView.state = .active
         effectView.wantsLayer = true
-        effectView.layer?.cornerRadius = 170 // 对应 340 宽度的半径
+        effectView.layer?.cornerRadius = 170
         effectView.layer?.masksToBounds = true
         
         let hostingView = NSHostingView(rootView: content().ignoresSafeArea())
@@ -100,7 +101,7 @@ final class RadialMenuPanel: NSPanel {
     @MainActor
     func dismiss() {
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.12
+            context.duration = 0.1
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             self.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
