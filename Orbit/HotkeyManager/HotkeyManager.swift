@@ -99,7 +99,7 @@ final class HotkeyManager: @unchecked Sendable {
             | (1 << CGEventType.otherMouseUp.rawValue)
 
         guard let port = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
+            tap: .cghidEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: eventMask,
