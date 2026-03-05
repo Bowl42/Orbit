@@ -3,19 +3,33 @@ import SwiftUI
 struct RadialMenuView: View {
     let viewModel: RadialMenuViewModel
     @State private var isAppearing = false
+    @Environment(\.colorScheme) var colorScheme
     
-    // UI Constants
     private let size: CGFloat = 340
     private let iconRadius: CGFloat = 112
     private let innerRadius: CGFloat = 58
-    
-    // ULTIMATE TRACKING: Use a timer inside the view to poll mouse location.
-    // This ensures high-frequency updates and bypasses all window focus issues.
     private let timer = Timer.publish(every: 0.01, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ZStack {
-            // 1. High-Contrast Selection Wedge
+            // 1. Level 1 Tint - Aligning with SettingsView deep glass feel
+            Circle()
+                .fill(colorScheme == .dark ? Color.black.opacity(0.2) : Color.white.opacity(0.1))
+                .frame(width: size, height: size)
+            
+            // 2. Specular High-Light Edge (The Glass Rim)
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: [.white.opacity(0.3), .white.opacity(0.05), .clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.5
+                )
+                .frame(width: size, height: size)
+
+            // 3. Selection Highlight Wedge
             Canvas { context, sz in
                 guard let selectedIndex = viewModel.selectedIndex else { return }
                 let count = viewModel.sectors.count
@@ -31,7 +45,6 @@ struct RadialMenuView: View {
                 path.addArc(center: center, radius: innerRadius, startAngle: endAngle, endAngle: startAngle, clockwise: true)
                 path.closeSubpath()
 
-                // Pure VisionOS white highlight
                 context.fill(path, with: .color(Color.white.opacity(0.2)))
                 
                 var rim = Path()
@@ -40,7 +53,7 @@ struct RadialMenuView: View {
             }
             .animation(.spring(response: 0.15, dampingFraction: 0.8), value: viewModel.selectedIndex)
 
-            // 3. Icons
+            // 4. Icons
             ForEach(Array(viewModel.sectors.enumerated()), id: \.element.id) { index, item in
                 SectorView(
                     item: item,
@@ -51,7 +64,7 @@ struct RadialMenuView: View {
                 )
             }
 
-            // 4. Center Hub
+            // 5. Center Hub
             LiquidGlassView(cornerRadius: innerRadius) {
                 ZStack {
                     if let item = selectedItem {
@@ -81,7 +94,6 @@ struct RadialMenuView: View {
         .opacity(isAppearing ? 1 : 0)
         .onAppear { isAppearing = true }
         .onReceive(timer) { _ in
-            // Actively update selection based on global mouse location
             viewModel.updateSelection(mouseLocation: NSEvent.mouseLocation)
         }
     }

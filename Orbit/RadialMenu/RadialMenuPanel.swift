@@ -16,7 +16,7 @@ final class RadialMenuPanel: NSPanel {
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
         worksWhenModal = true
-        acceptsMouseMovedEvents = true // CRITICAL: Allow mouse moved events
+        acceptsMouseMovedEvents = true
 
         collectionBehavior = [
             .fullScreenAuxiliary,
@@ -43,8 +43,9 @@ final class RadialMenuPanel: NSPanel {
 
     @MainActor
     func setContent<Content: View>(@ViewBuilder _ content: () -> Content) {
+        // 使用与设置窗口一致的 fullScreenUI 材质
         let effectView = NSVisualEffectView()
-        effectView.material = .hudWindow 
+        effectView.material = .fullScreenUI 
         effectView.blendingMode = .behindWindow
         effectView.state = .active
         effectView.wantsLayer = true
@@ -101,7 +102,7 @@ final class RadialMenuPanel: NSPanel {
     @MainActor
     func dismiss() {
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.1
+            context.duration = 0.15
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             self.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
