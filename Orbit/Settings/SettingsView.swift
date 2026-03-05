@@ -271,15 +271,13 @@ struct SettingsView: View {
         Binding(
             get: { SectorKind(from: viewModel.sectorConfigs[viewModel.selectedSectorIndex]) },
             set: { k in
-                withAnimation(.spring(response: 0.3)) {
-                    switch k {
-                    case .recent: viewModel.sectorConfigs[viewModel.selectedSectorIndex] = .recent(index: 0)
-                    case .pinned: viewModel.sectorConfigs[viewModel.selectedSectorIndex] = .pinned(bundleId: "", name: "", icon: nil)
-                    case .url: viewModel.sectorConfigs[viewModel.selectedSectorIndex] = .url(name: "", url: "", icon: nil)
-                    case .system: viewModel.sectorConfigs[viewModel.selectedSectorIndex] = .systemAction(action: .lockScreen)
-                    case .shell: viewModel.sectorConfigs[viewModel.selectedSectorIndex] = .shellCommand(name: "", command: "", icon: nil)
-                    case .translate: viewModel.sectorConfigs[viewModel.selectedSectorIndex] = .translate
-                    }
+                switch k {
+                case .recent: viewModel.sectorConfigs[viewModel.selectedSectorIndex] = .recent(index: 0)
+                case .pinned: viewModel.sectorConfigs[viewModel.selectedSectorIndex] = .pinned(bundleId: "", name: "", icon: nil)
+                case .url: viewModel.sectorConfigs[viewModel.selectedSectorIndex] = .url(name: "", url: "", icon: nil)
+                case .system: viewModel.sectorConfigs[viewModel.selectedSectorIndex] = .systemAction(action: .lockScreen)
+                case .shell: viewModel.sectorConfigs[viewModel.selectedSectorIndex] = .shellCommand(name: "", command: "", icon: nil)
+                case .translate: viewModel.sectorConfigs[viewModel.selectedSectorIndex] = .translate
                 }
             }
         )
@@ -476,6 +474,7 @@ private struct EditorPaneGridAdaptive: View {
             default: Text("Ready").foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 }
 
